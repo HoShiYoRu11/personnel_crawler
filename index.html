@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師甄試小幫手</title>
+    
+    <!-- 1. 引入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. 引入 Babel (讓瀏覽器可以看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 內建圖示元件 (取代 lucide-react) ---
+        const Icons = {
+            Send: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            ),
+            Settings: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            ),
+            Play: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            ),
+            RotateCcw: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            ),
+            CheckCircle: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            ),
+            ExternalLink: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            ),
+            Eye: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            ),
+            Bug: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="8" height="14" x="8" y="6" rx="4"></rect><path d="m19 7-3 3"/><path d="m5 7 3 3"/><path d="m19 19-3-3"/><path d="m5 19 3-3"/><path d="M2 12h6"/><path d="M16 12h6"/><path d="M12 2v4"/></svg>
+            ),
+            Globe: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            ),
+            Calendar: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            ),
+            HelpCircle: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            ),
+            Info: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            )
+        };
+
+        // --- 設定區 ---
+        const FIXED_CHANNEL_TOKEN = "GSmRvVFGYNiFJuQXv46ZR0gksKn3A9pkR/8N62rzPeuiVCbMFK9/FmkZDPuhqId8QHkxIklXM6tPKpolnPRFpVgastoX6BxU5c3bwYxDTd5fd+LGedJMNbj6Z9To3nw4y5FB+9jsGUzo7CtT+C0vdAdB04t89/1O/w1cDnyilFU=";
+
+        const PROXY_OPTIONS = [
+          { id: 'corsproxy', name: '線路 A (CorsProxy)', url: "https://corsproxy.io/?" },
+          { id: 'allorigins', name: '線路 B (AllOrigins)', url: "https://api.allorigins.win/raw?url=" },
+          { id: 'thingproxy', name: '線路 C (ThingProxy)', url: "https://thingproxy.freeboard.io/fetch/" }
+        ];
+
+        const TARGET_BASE_URL = "https://personnel.k12ea.gov.tw/tsn/index/JobTShow.aspx?f=FUN201003161118253V1";
+        const DETAIL_BASE_URL = "https://personnel.k12ea.gov.tw/tsn/index/";
+
+        const COMMON_SUBJECTS = [
+          "國文", "英文", "數學", "物理", "化學", "生物", "地球科學", 
+          "歷史", "地理", "公民與社會", "公民", "音樂", "美術", "體育", 
+          "資訊科技", "生活科技", "輔導", "特殊教育", "健康與護理"
+        ];
+
+        const App = () => {
+          // --- State: Configuration ---
+          const lineToken = FIXED_CHANNEL_TOKEN;
+          
+          const [lineUserId, setLineUserId] = useState('');
+          const [selectedSubjects, setSelectedSubjects] = useState(['公民', '生物']);
+          const [onlyHighSchool, setOnlyHighSchool] = useState(true);
+          const [onlyToday, setOnlyToday] = useState(true); 
+          const [scanPages, setScanPages] = useState(3);
+          const [autoInterval, setAutoInterval] = useState(0);
+          const [currentProxy, setCurrentProxy] = useState(PROXY_OPTIONS[0].url);
+
+          // --- State: Runtime ---
+          const [isRunning, setIsRunning] = useState(false);
+          const [isSending, setIsSending] = useState(false);
+          const [logs, setLogs] = useState([]);
+          const [foundJobs, setFoundJobs] = useState([]);
+          const [progress, setProgress] = useState(0);
+          const [lastCheckTime, setLastCheckTime] = useState(null);
+          const [countdown, setCountdown] = useState(null);
+          const [debugMode, setDebugMode] = useState(false);
+          const [showIdHelp, setShowIdHelp] = useState(false);
+
+          const logContainerRef = useRef(null);
+
+          useEffect(() => {
+            const savedConfig = localStorage.getItem('teacherHelperConfig_v4');
+            if (savedConfig) {
+              const parsed = JSON.parse(savedConfig);
+              setLineUserId(parsed.lineUserId || '');
+              setSelectedSubjects(parsed.selectedSubjects || ['公民', '生物']);
+              setScanPages(parsed.scanPages || 3);
+              setOnlyHighSchool(parsed.onlyHighSchool !== undefined ? parsed.onlyHighSchool : true);
+              setOnlyToday(parsed.onlyToday !== undefined ? parsed.onlyToday : true);
+              if (parsed.proxyUrl) setCurrentProxy(parsed.proxyUrl);
+            }
+          }, []);
+
+          useEffect(() => {
+            const config = { 
+              lineUserId, 
+              selectedSubjects, 
+              scanPages, 
+              onlyHighSchool, 
+              onlyToday, 
+              proxyUrl: currentProxy 
+            };
+            localStorage.setItem('teacherHelperConfig_v4', JSON.stringify(config));
+          }, [lineUserId, selectedSubjects, scanPages, onlyHighSchool, onlyToday, currentProxy]);
+
+          useEffect(() => {
+            if (logContainerRef.current) {
+              logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+            }
+          }, [logs]);
+
+          useEffect(() => {
+            if (autoInterval > 0 && !isRunning && lastCheckTime) {
+              const intervalMs = autoInterval * 60 * 60 * 1000;
+              const nextRun = lastCheckTime + intervalMs;
+              
+              const checkTimer = setInterval(() => {
+                const now = Date.now();
+                const diff = nextRun - now;
+                if (diff <= 0) {
+                  startScraping(true);
+                } else {
+                  setCountdown(Math.ceil(diff / 1000 / 60));
+                }
+              }, 1000);
+
+              return () => clearInterval(checkTimer);
+            } else {
+              setCountdown(null);
+            }
+          }, [autoInterval, isRunning, lastCheckTime]);
+
+          const addLog = (msg, type = 'info') => {
+            const timestamp = new Date().toLocaleTimeString();
+            setLogs(prev => [...prev, { time: timestamp, msg, type }]);
+          };
+
+          const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+          const getTodayString = () => {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+          };
+
+          const generateMessages = (jobs) => {
+            return jobs.map(job => 
+              `${job.schoolName} 今日有公告「${job.subjects}」職缺，請參考下列資訊：\n` +
+              `職缺類型：${job.jobType}\n` +
+              `發布日期：${job.publishDate}\n` +
+              `報名截止日期：${job.endDate}\n` +
+              `考試開始日期：${job.examDate}\n` +
+              `結果公布日期：${job.resultDate}\n` +
+              `參考連結：${job.url}\n`
+            );
+          };
+
+          const executeSendLine = async (jobsToSend) => {
+            if (!lineToken || !lineUserId) {
+              addLog("未設定 User ID，無法發送", "warn");
+              return;
+            }
+            if (jobsToSend.length === 0) {
+              addLog("無資料可發送", "warn");
+              return;
+            }
+
+            setIsSending(true);
+            const messages = generateMessages(jobsToSend);
+            addLog(`準備發送 ${messages.length} 則 LINE 訊息...`, "info");
+            
+            const lineProxy = "https://corsproxy.io/?"; 
+
+            for (const msg of messages) {
+              try {
+                const lineApiUrl = "https://api.line.me/v2/bot/message/push";
+                const response = await fetch(lineProxy + encodeURIComponent(lineApiUrl), {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${lineToken}`,
+                      'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                      to: lineUserId,
+                      messages: [{ type: 'text', text: msg }]
+                    })
+                });
+
+                if (response.ok || response.status === 200) {
+                   addLog("LINE 訊息發送成功！", "success");
+                } else {
+                   addLog(`LINE 發送可能失敗 (Status: ${response.status})。請確認您已加入機器人好友。`, "warn");
+                }
+              } catch (e) {
+                addLog(`LINE 發送錯誤: ${e.message}`, "error");
+              }
+              await sleep(500);
+            }
+            setIsSending(false);
+          };
+
+          const handleManualPush = async () => {
+            if (foundJobs.length === 0) {
+              addLog("列表無資料，無法推播", "warn");
+              return;
+            }
+            await executeSendLine(foundJobs);
+          };
+
+          const startScraping = async (autoPush = false) => {
+            if (isRunning) return;
+            setIsRunning(true);
+            setLogs([]); 
+            setFoundJobs([]); 
+            setProgress(0);
+            
+            const todayStr = getTodayString();
+            
+            addLog(`=== 開始查詢 (${autoPush ? "查詢並推播" : "預覽模式"}) ===`, "info");
+            addLog(`篩選日期: ${onlyToday ? `僅限今日 (${todayStr})` : "顯示全部 (依掃描頁數)"}`, "info");
+
+            let accumulatedJobs = [];
+
+            try {
+              let allLinks = [];
+              
+              for (let i = 1; i <= scanPages; i++) {
+                addLog(`讀取第 ${i} 頁...`, "info");
+                
+                const listUrl = `${TARGET_BASE_URL}&List1_PAGE=${i}&_t=${Date.now()}`;
+                
+                try {
+                  const res = await fetch(currentProxy + encodeURIComponent(listUrl));
+                  if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+                  
+                  const text = await res.text();
+                  
+                  if (debugMode) {
+                     addLog(`P${i} HTML長度: ${text.length} chars`, "warn");
+                  }
+
+                  if (text.length < 2000) {
+                    addLog(`⚠️ 警告：第 ${i} 頁內容過短，可能被擋。`, "error");
+                  }
+
+                  const doc = new DOMParser().parseFromString(text, "text/html");
+                  
+                  let anchors = Array.from(doc.querySelectorAll("a[title='瀏覽']"));
+                  
+                  if (anchors.length === 0) {
+                    if (debugMode) addLog("策略 1 失敗，嘗試策略 2...", "warn");
+                    anchors = Array.from(doc.querySelectorAll("a")).filter(a => {
+                        const href = a.getAttribute("href");
+                        return href && 
+                               (href.toLowerCase().includes("jobshow.aspx") || href.toLowerCase().includes("view.aspx")) &&
+                               !href.toLowerCase().endsWith("jobtshow.aspx");
+                    });
+                  }
+
+                  const pageLinks = anchors
+                    .map(a => a.getAttribute("href"))
+                    .filter((v, idx, self) => self.indexOf(v) === idx);
+
+                  addLog(`第 ${i} 頁找到 ${pageLinks.length} 個連結`, pageLinks.length > 0 ? "success" : "warn");
+                  
+                  allLinks = [...allLinks, ...pageLinks];
+                  
+                  setProgress((i / scanPages) * 30);
+                  await sleep(800); 
+                } catch (err) {
+                  addLog(`讀取第 ${i} 頁失敗: ${err.message}`, "error");
+                }
+              }
+
+              allLinks = [...new Set(allLinks)];
+              addLog(`去重後共 ${allLinks.length} 個職缺，開始分析詳情...`, "info");
+              
+              let processedCount = 0;
+
+              for (const link of allLinks) {
+                const fullDetailUrl = DETAIL_BASE_URL + link;
+                const proxyUrl = currentProxy + encodeURIComponent(fullDetailUrl + `&_t=${Date.now()}`);
+                
+                try {
+                  const res = await fetch(proxyUrl);
+                  const text = await res.text();
+                  const doc = new DOMParser().parseFromString(text, "text/html");
+
+                  const getVal = (id) => doc.getElementById(id)?.textContent?.trim() || "";
+                  
+                  const publishDate = getVal('ContentPlaceHolder1_lbtbJobValSdt');
+                  const jobType = getVal('ContentPlaceHolder1_lbtbJobPleTyp');
+                  const schoolName = getVal('ContentPlaceHolder1_lbUntNckNme1');
+                  const subjectsRaw = getVal('ContentPlaceHolder1_lbtrCLP1');
+                  const state = getVal('ContentPlaceHolder1_lbtbJobTchTyp');
+                  const endDate = getVal('ContentPlaceHolder1_lbtbJobValEdt');
+                  const examDate = getVal('ContentPlaceHolder1_lbtbJobSdt');
+                  const resultDate = getVal('ContentPlaceHolder1_lbtbJobEdt');
+
+                  if (debugMode && processedCount < 1) {
+                     addLog(`分析測試: ${schoolName} [${publishDate}]`, "warn");
+                  }
+
+                  let isMatch = true;
+
+                  if (onlyToday) {
+                    if (publishDate !== todayStr) isMatch = false;
+                  }
+
+                  if (onlyHighSchool && !state.startsWith('高級')) isMatch = false;
+
+                  let matchedSubjectsList = [];
+                  if (isMatch) {
+                    let subjectFound = false;
+                    
+                    for (const selSub of selectedSubjects) {
+                       if (subjectsRaw.includes(selSub)) {
+                         subjectFound = true;
+                         const regex = new RegExp(`${selSub}\\s*\\d*`, 'i');
+                         const match = subjectsRaw.match(regex);
+                         
+                         if (match) {
+                           matchedSubjectsList.push(match[0]);
+                         } else {
+                           matchedSubjectsList.push(selSub);
+                         }
+                       }
+                    }
+
+                    if (!subjectFound) {
+                      isMatch = false;
+                    }
+                  }
+
+                  if (isMatch) {
+                    const finalSubjectText = matchedSubjectsList.join('、');
+                    addLog(`✅ 找到: ${schoolName} (${finalSubjectText})`, "success");
+                    
+                    accumulatedJobs.push({
+                      schoolName,
+                      jobType,
+                      publishDate,
+                      endDate,
+                      examDate,
+                      resultDate,
+                      url: fullDetailUrl.split('&_t=')[0],
+                      subjects: finalSubjectText
+                    });
+                  }
+
+                } catch (err) {
+                  // Fail silently
+                }
+
+                processedCount++;
+                const currentProgress = 30 + ((processedCount / allLinks.length) * 70);
+                setProgress(currentProgress);
+                await sleep(200); 
+              }
+
+              setFoundJobs(accumulatedJobs);
+              addLog(`掃描完成。共找到 ${accumulatedJobs.length} 筆符合資料。`, "info");
+
+              if (autoPush) {
+                if (accumulatedJobs.length > 0) {
+                  await executeSendLine(accumulatedJobs);
+                } else {
+                  addLog("無符合條件的職缺，未推播。", "info");
+                }
+              } else {
+                if (accumulatedJobs.length > 0) {
+                   addLog("已完成預覽。如需通知，請點擊「推播目前結果」。", "success");
+                }
+              }
+
+            } catch (e) {
+              addLog(`發生嚴重錯誤: ${e.message}`, "error");
+            } finally {
+              setIsRunning(false);
+              setLastCheckTime(Date.now());
+              setProgress(100);
+              addLog("=== 流程結束 ===", "info");
+            }
+          };
+
+          const toggleSubject = (sub) => {
+            setSelectedSubjects(prev => 
+              prev.includes(sub) ? prev.filter(s => s !== sub) : [...prev, sub]
+            );
+          };
+
+          return (
+            <div className="min-h-screen bg-gray-50 text-gray-800 p-4 md:p-8 font-sans">
+              <div className="max-w-4xl mx-auto space-y-6">
+                
+                {/* Header */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">🏫 教師甄試查詢小幫手 (高中職版)</h1>
+                    <p className="text-gray-500 text-sm">
+                      自動查詢教育部教選網，篩選科目與職缺，並透過 LINE 推播通知。
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setDebugMode(!debugMode)}
+                      className={`text-xs flex items-center gap-1 px-3 py-1.5 rounded border transition-colors ${debugMode ? 'bg-red-50 text-red-600 border-red-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      <Icons.Bug size={14}/> {debugMode ? '除錯模式: 開' : '除錯模式'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  
+                  {/* Left Column: Settings */}
+                  <div className="md:col-span-1 space-y-6">
+                    
+                    {/* Proxy Settings */}
+                    <div className="bg-white p-5 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 mb-4 text-orange-600">
+                        <Icons.Globe size={20} />
+                        <h2 className="font-semibold">連線線路</h2>
+                      </div>
+                      <div className="space-y-2">
+                         <select 
+                            value={currentProxy}
+                            onChange={(e) => setCurrentProxy(e.target.value)}
+                            className="w-full p-2 border rounded text-sm bg-gray-50"
+                         >
+                           {PROXY_OPTIONS.map(opt => (
+                             <option key={opt.id} value={opt.url}>{opt.name}</option>
+                           ))}
+                         </select>
+                      </div>
+                    </div>
+
+                    {/* Filter Settings */}
+                    <div className="bg-white p-5 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 mb-4 text-green-600">
+                        <Icons.CheckCircle size={20} />
+                        <h2 className="font-semibold">篩選條件</h2>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b pb-3">
+                          <span className="text-sm font-medium flex items-center gap-1">
+                            <Icons.Calendar size={16} /> 僅限今日發布
+                          </span>
+                          <input 
+                            type="checkbox" 
+                            checked={onlyToday} 
+                            onChange={(e) => setOnlyToday(e.target.checked)}
+                            className="w-5 h-5 text-blue-600"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between border-b pb-3">
+                          <span className="text-sm">僅限高中職</span>
+                          <input 
+                            type="checkbox" 
+                            checked={onlyHighSchool} 
+                            onChange={(e) => setOnlyHighSchool(e.target.checked)}
+                            className="w-5 h-5 text-blue-600"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">掃描頁數 (預設 3)</label>
+                          <input 
+                            type="number" 
+                            min="1" max="10" 
+                            value={scanPages}
+                            onChange={(e) => setScanPages(parseInt(e.target.value))}
+                            className="w-full p-2 border rounded text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-2">關注科目</label>
+                          <div className="flex flex-wrap gap-2">
+                            {COMMON_SUBJECTS.map(sub => (
+                              <button
+                                key={sub}
+                                onClick={() => toggleSubject(sub)}
+                                className={`px-2 py-1 text-xs rounded-md border transition-colors ${
+                                  selectedSubjects.includes(sub) 
+                                    ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' 
+                                    : 'bg-gray-50 border-gray-200 text-gray-500'
+                                }`}
+                              >
+                                {sub}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LINE Settings */}
+                    <div className="bg-white p-5 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 mb-4 text-blue-600">
+                        <Icons.Settings size={20} />
+                        <h2 className="font-semibold">LINE 通知設定</h2>
+                      </div>
+                      
+                      <div className="mb-4 text-xs text-gray-400 bg-gray-100 p-2 rounded">
+                        <span className="font-semibold">目前使用的機器人：</span><br/>
+                        教甄查詢小幫手 (固定)
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-medium text-gray-500">接收者 User ID (必填)</label>
+                            <button 
+                              onClick={() => setShowIdHelp(!showIdHelp)}
+                              className="text-blue-500 text-xs flex items-center hover:underline"
+                            >
+                              <Icons.HelpCircle size={12} className="mr-1"/> 如何取得 ID?
+                            </button>
+                          </div>
+                          <input 
+                            type="text" 
+                            value={lineUserId}
+                            onChange={(e) => setLineUserId(e.target.value)}
+                            className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-200 outline-none"
+                            placeholder="請輸入 U 開頭的 User ID"
+                          />
+                        </div>
+
+                        {showIdHelp && (
+                          <div className="bg-blue-50 p-3 rounded-md text-xs text-blue-800 space-y-2 border border-blue-100">
+                            <p className="font-bold flex items-center gap-1"><Icons.Info size={14}/> 如何取得 User ID？</p>
+                            <ol className="list-decimal list-inside space-y-1 ml-1 text-blue-700">
+                              <li>請先加入此機器人為好友。</li>
+                              <li>User ID 是個人的識別碼（通常以 U 開頭）。</li>
+                              <li>建議搜尋「Line ID 查詢」類型的機器人來查詢您的 User ID。</li>
+                              <li>
+                                <a 
+                                  href="https://www.google.com/search?q=Line+Bot+User+ID+%E6%9F%A5%E8%A9%A2" 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="underline font-bold text-blue-600 hover:text-blue-800"
+                                >
+                                  點此搜尋相關教學
+                                </a>
+                              </li>
+                            </ol>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                     {/* Auto Run Settings */}
+                     <div className="bg-white p-5 rounded-xl shadow-sm">
+                      <div className="flex items-center gap-2 mb-4 text-purple-600">
+                        <Icons.RotateCcw size={20} />
+                        <h2 className="font-semibold">自動化</h2>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">自動檢查頻率 (小時)</label>
+                        <select 
+                          value={autoInterval}
+                          onChange={(e) => setAutoInterval(parseInt(e.target.value))}
+                          className="w-full p-2 border rounded text-sm"
+                        >
+                          <option value={0}>手動執行 (不自動)</option>
+                          <option value={1}>每 1 小時</option>
+                          <option value={3}>每 3 小時</option>
+                          <option value={6}>每 6 小時</option>
+                          <option value={24}>每 24 小時</option>
+                        </select>
+                        {autoInterval > 0 && (
+                           <p className="text-xs text-orange-500 mt-2">
+                             ⚠ 請保持此分頁開啟以執行自動排程。
+                             {countdown !== null && <span className="block font-bold mt-1">下次檢查：{countdown} 分鐘後</span>}
+                           </p>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Status & Logs */}
+                  <div className="md:col-span-2 space-y-6">
+                    
+                    {/* Controls */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm space-y-4">
+                       
+                       {/* Progress Bar */}
+                       <div>
+                         <div className="flex justify-between items-center mb-1">
+                           <h3 className="font-bold text-lg">{isRunning ? "查詢中..." : (foundJobs.length > 0 ? "查詢完成" : "準備就緒")}</h3>
+                           <span className="text-xs text-gray-500">{Math.round(progress)}%</span>
+                         </div>
+                         <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{width: `${progress}%`}}></div>
+                          </div>
+                       </div>
+
+                       {/* Action Buttons */}
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                          <button
+                            onClick={() => startScraping(false)}
+                            disabled={isRunning}
+                            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold shadow-sm border transition-all active:scale-95 ${
+                              isRunning 
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                            }`}
+                          >
+                            <Icons.Eye size={18} />
+                            僅預覽查詢
+                          </button>
+
+                          <button
+                            onClick={() => startScraping(true)}
+                            disabled={isRunning}
+                            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white shadow-md transition-all active:scale-95 ${
+                              isRunning 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
+                          >
+                            <Icons.Play size={18} />
+                            查詢並推播
+                          </button>
+
+                          <button
+                            onClick={handleManualPush}
+                            disabled={isRunning || isSending || foundJobs.length === 0}
+                            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold shadow-sm transition-all active:scale-95 ${
+                              isRunning || isSending || foundJobs.length === 0
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' 
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                          >
+                            {isSending ? <Icons.RotateCcw className="animate-spin" size={18} /> : <Icons.Send size={18} />}
+                            {isSending ? '發送中...' : '推播目前結果'}
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Results Table */}
+                    {foundJobs.length > 0 && (
+                      <div className="bg-white p-6 rounded-xl shadow-sm border border-green-200">
+                        <h3 className="font-bold text-green-700 mb-4 flex items-center gap-2">
+                          <Icons.CheckCircle size={20}/> 發現職缺 ({foundJobs.length})
+                        </h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-green-50 text-green-800">
+                              <tr>
+                                <th className="p-2 rounded-tl-lg">學校</th>
+                                <th className="p-2">科目</th>
+                                <th className="p-2">發布日期</th>
+                                <th className="p-2">類型</th>
+                                <th className="p-2 rounded-tr-lg">連結</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {foundJobs.map((job, idx) => (
+                                <tr key={idx} className="border-b hover:bg-gray-50">
+                                  <td className="p-2 font-medium">{job.schoolName}</td>
+                                  <td className="p-2">{job.subjects}</td>
+                                  <td className="p-2 text-gray-500">{job.publishDate}</td>
+                                  <td className="p-2">
+                                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">
+                                      {job.jobType}
+                                    </span>
+                                  </td>
+                                  <td className="p-2">
+                                    <a href={job.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700">
+                                      <Icons.ExternalLink size={16} />
+                                    </a>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Logs Console */}
+                    <div className="bg-gray-900 text-gray-200 p-4 rounded-xl shadow-inner h-96 overflow-hidden flex flex-col">
+                      <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+                        <span className="text-xs font-mono text-gray-400">SYSTEM LOGS</span>
+                        <span className="text-xs font-mono text-gray-500">{logs.length} entries</span>
+                      </div>
+                      <div 
+                        ref={logContainerRef}
+                        className="flex-1 overflow-y-auto font-mono text-xs space-y-1 pr-2"
+                      >
+                        {logs.length === 0 && <span className="text-gray-600 italic">等待執行...</span>}
+                        {logs.map((log, i) => (
+                          <div key={i} className={`flex gap-2 ${
+                            log.type === 'error' ? 'text-red-400' : 
+                            log.type === 'success' ? 'text-green-400' : 
+                            log.type === 'warn' ? 'text-yellow-400' : 'text-gray-300'
+                          }`}>
+                            <span className="text-gray-500">[{log.time}]</span>
+                            <span>{log.msg}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                
+                <div className="text-center text-gray-400 text-xs mt-8 pb-4">
+                  <p>注意：此程式為純前端運行，資料抓取依賴公開 CORS Proxy。若教選網改版或 Proxy 失效可能會導致無法使用。</p>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
