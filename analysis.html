@@ -57,7 +57,7 @@
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-blue-700 leading-relaxed">
-                        <strong>運作原理：</strong>通常大型考試我們只能得知「極少數」其他考生的分數。本系統採用統計學的<strong>蒙地卡羅法 (Monte Carlo Method)</strong>，在您指定的分布模式與重複次數下進行<strong>隨機母體重組與排序</strong>，結合您提供的已知分數與限制條件，科學化推估您最可能落點的名次區間與錄取機率！
+                        <strong>同分增額運作原理：</strong>真實考試多採用同分增額錄取。本系統升級版支援<strong>離散級距分數生成</strong>與<strong>同分束擬合算法</strong>。當設定「增額後錄取名額」大於「原定錄取名額」時，電腦會在落點臨界線自動模擬出對應人數的同分群，完美還原真實分發邏輯！
                     </p>
                 </div>
             </div>
@@ -78,16 +78,21 @@
                 </div>
                 
                 <form id="simulationForm" class="p-6 space-y-5" onsubmit="event.preventDefault();">
-                    <!-- 考試規模設定 -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">參與考試總人數 (N)</label>
+                    <!-- 考試規模與錄取設定 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="sm:col-span-1">
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">考試總人數 (N)</label>
                             <input type="number" id="totalCandidates" value="500" min="10" max="1000000" required
                                 class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">預計錄取人數 (Q)</label>
-                            <input type="number" id="quota" value="50" min="1" required
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">原定錄取名額</label>
+                            <input type="number" id="quotaPlanned" value="50" min="1" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">增額後錄取名額</label>
+                            <input type="number" id="quotaActual" value="50" min="1" required
                                 class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm">
                         </div>
                     </div>
@@ -122,8 +127,8 @@
                         </div>
                     </div>
 
-                    <!-- 分布模式 與 模擬次數 -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- 分布模式、級距精度與模擬次數 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">成績分布模式</label>
                             <select id="distMode" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm bg-white">
@@ -134,7 +139,17 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">模擬重複次數 (Trials)</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">分數最小單位 (級距)</label>
+                            <select id="scoreResolution" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm bg-white">
+                                <option value="auto" selected>自動判定 (依輸入)</option>
+                                <option value="1">1 分 (整數)</option>
+                                <option value="0.5">0.5 分</option>
+                                <option value="0.1">0.1 分</option>
+                                <option value="continuous">無限制 (連續值)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">模擬重複次數</label>
                             <select id="simTrials" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm bg-white">
                                 <option value="1000">1,000 次 (快速評估)</option>
                                 <option value="5000" selected>5,000 次 (標準推薦)</option>
@@ -258,20 +273,20 @@
                         <!-- 圖例與資訊 -->
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
                             <div>
-                                <span class="block text-slate-400">模擬平均分數</span>
-                                <span class="font-bold text-slate-700" id="infoAvg">-- 分</span>
-                            </div>
-                            <div>
-                                <span class="block text-slate-400">標準差 (高低分散度)</span>
-                                <span class="font-bold text-slate-700" id="infoStd">-- 分</span>
+                                <span class="block text-slate-400">模擬平均分數 / 標準差</span>
+                                <span class="font-bold text-slate-700" id="infoStats">-- 分 / -- 分</span>
                             </div>
                             <div>
                                 <span class="block text-slate-400">估計最低錄取分數</span>
                                 <span class="font-bold text-rose-600" id="infoCutoff">-- 分</span>
                             </div>
                             <div>
-                                <span class="block text-slate-400">模擬演算重複次數</span>
-                                <span class="font-bold text-indigo-600" id="infoTrials">-- 次</span>
+                                <span class="block text-slate-400">錄取名額 (原定/實際)</span>
+                                <span class="font-bold text-indigo-600" id="infoQuota">-- / -- 人</span>
+                            </div>
+                            <div>
+                                <span class="block text-slate-400">模擬重複次數</span>
+                                <span class="font-bold text-slate-700" id="infoTrials">-- 次</span>
                             </div>
                         </div>
                     </div>
@@ -328,14 +343,12 @@
         window.addEventListener('DOMContentLoaded', () => {
             initEventHandlers();
             updateDistDescription();
-            // 先繪製一個空白或示意的 Canvas
             clearCanvas();
         });
 
         // 監聽解析貼上的分數
         document.getElementById('otherScores').addEventListener('input', (e) => {
             const rawText = e.target.value;
-            // 匹配所有數字 (包含小數點)
             const matches = rawText.match(/[-+]?[0-9]*\.?[0-9]+/g);
             const parsed = [];
             const maxScoreInput = parseFloat(document.getElementById('maxScore').value) || 100;
@@ -387,12 +400,10 @@
             `;
             container.appendChild(toast);
             
-            // 觸發動畫
             setTimeout(() => {
                 toast.classList.remove('translate-y-2', 'opacity-0');
             }, 50);
 
-            // 消失並清除
             setTimeout(() => {
                 toast.classList.add('opacity-0', 'translate-y-2');
                 setTimeout(() => toast.remove(), 300);
@@ -400,8 +411,6 @@
         }
 
         // --- 3. 隨機數生成器與統計輔助函數 ---
-        
-        // 1. 標準常態隨機數 (Box-Muller)
         function randomNormal(mean, stdDev) {
             let u = 0, v = 0;
             while(u === 0) u = Math.random();
@@ -410,12 +419,10 @@
             return num * stdDev + mean;
         }
 
-        // 2. 均勻隨機數
         function randomUniform(min, max) {
             return min + Math.random() * (max - min);
         }
 
-        // 3. 三角隨機數
         function randomTriangular(min, max, mode) {
             const u = Math.random();
             const F = (mode - min) / (max - min);
@@ -426,7 +433,6 @@
             }
         }
 
-        // 4. 雙峰隨機數
         function randomBimodal(mean1, stdDev1, mean2, stdDev2, p1 = 0.5) {
             if (Math.random() < p1) {
                 return randomNormal(mean1, stdDev1);
@@ -435,20 +441,17 @@
             }
         }
 
-        // 統計：計算陣列平均數
         function getMean(arr) {
             if (!arr.length) return 0;
             return arr.reduce((acc, val) => acc + val, 0) / arr.length;
         }
 
-        // 統計：計算樣本標準差
         function getStdDev(arr, mean) {
-            if (arr.length < 2) return 12; // 預設標準差
+            if (arr.length < 2) return 12;
             const variance = arr.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / (arr.length - 1);
             return Math.sqrt(variance);
         }
 
-        // 統計：求分位數 (分位值)
         function getPercentile(sortedArr, p) {
             if (!sortedArr.length) return 0;
             if (p <= 0) return sortedArr[0];
@@ -464,7 +467,26 @@
         function initEventHandlers() {
             document.getElementById('btnSimulate').addEventListener('click', runSimulation);
             
-            // 監聽視窗縮放以重繪 Canvas
+            // 雙向防呆：確保 原定名額 <= 實際名額
+            const qPlannedInput = document.getElementById('quotaPlanned');
+            const qActualInput = document.getElementById('quotaActual');
+
+            qPlannedInput.addEventListener('input', () => {
+                const pVal = parseInt(qPlannedInput.value) || 0;
+                const aVal = parseInt(qActualInput.value) || 0;
+                if (aVal < pVal) {
+                    qActualInput.value = pVal;
+                }
+            });
+
+            qActualInput.addEventListener('input', () => {
+                const pVal = parseInt(qPlannedInput.value) || 0;
+                const aVal = parseInt(qActualInput.value) || 0;
+                if (aVal < pVal) {
+                    qPlannedInput.value = aVal;
+                }
+            });
+
             window.addEventListener('resize', () => {
                 if (!document.getElementById('resultPanel').classList.contains('hidden') && lastAnalysisResult) {
                     drawResultChart(lastAnalysisResult);
@@ -472,27 +494,31 @@
             });
         }
 
-        // 保存最後一次分析數據供重繪使用
         let lastAnalysisResult = null;
 
         function runSimulation() {
-            // 收集並校驗輸入數據
             const totalN = parseInt(document.getElementById('totalCandidates').value);
-            const quotaQ = parseInt(document.getElementById('quota').value);
+            const qPlanned = parseInt(document.getElementById('quotaPlanned').value);
+            const qActual = parseInt(document.getElementById('quotaActual').value);
             const userScore = parseFloat(document.getElementById('userScore').value);
             const maxScore = parseFloat(document.getElementById('maxScore').value);
             const knowCutoff = document.getElementById('knowCutoff').checked;
             const cutoffScore = parseFloat(document.getElementById('cutoffScore').value);
             const distMode = document.getElementById('distMode').value;
+            const scoreResolution = document.getElementById('scoreResolution').value;
             const trials = parseInt(document.getElementById('simTrials').value) || 1000;
 
-            // 基本檢驗
+            // 基本檢驗與防呆
             if (isNaN(totalN) || totalN < 10) {
                 showToast("考試總人數必須大於 10 人", "error");
                 return;
             }
-            if (isNaN(quotaQ) || quotaQ <= 0 || quotaQ > totalN) {
-                showToast("錄取人數不合規，必須介於 1 與 總人數 之間", "error");
+            if (isNaN(qPlanned) || qPlanned <= 0 || qPlanned > totalN) {
+                showToast("原定錄取名額不合規，必須介於 1 與 總人數 之間", "error");
+                return;
+            }
+            if (isNaN(qActual) || qActual < qPlanned || qActual > totalN) {
+                showToast("實際錄取名額不能小於原定錄取名額，且需小於總人數", "error");
                 return;
             }
             if (isNaN(userScore) || userScore < 0 || userScore > maxScore) {
@@ -506,14 +532,13 @@
                 }
             }
 
-            // 檢查已知人數與總人數關係
             const totalKnownCount = parsedOtherScores.length;
             if (totalKnownCount >= totalN) {
                 showToast(`已知其他考生的人數 (${totalKnownCount}) 不能大於或等於總人數 (${totalN})`, "error");
                 return;
             }
 
-            // 切換為載入狀態
+            // 切換載入狀態
             const placeholder = document.getElementById('resultPlaceholder');
             const loader = document.getElementById('loader');
             const resultPanel = document.getElementById('resultPanel');
@@ -522,180 +547,203 @@
             resultPanel.classList.add('hidden');
             loader.classList.remove('hidden');
 
-            // 模擬極速加載動畫
             let progress = 0;
             const progressInterval = setInterval(() => {
                 progress += 10;
                 document.getElementById('loaderProgress').style.width = `${progress}%`;
                 
                 if (progress === 20) {
-                    document.getElementById('loaderText').innerText = "正在進行貝氏母體數據擬合與先驗修正...";
+                    document.getElementById('loaderText').innerText = "正在進行貝氏母體數據擬合與分數精度級距校對...";
                 } else if (progress === 50) {
-                    document.getElementById('loaderText').innerText = "正在優化高階蒙地卡羅母體生成結構...";
+                    document.getElementById('loaderText').innerText = "正在優化同分增額限制器與母體重組空間...";
                 } else if (progress === 80) {
-                    document.getElementById('loaderText').innerText = `正在跑 ${trials.toLocaleString()} 回合高密落點模擬排序...`;
+                    document.getElementById('loaderText').innerText = `正在為 ${trials.toLocaleString()} 回合高密同分落點進行排序演算...`;
                 }
 
                 if (progress >= 100) {
                     clearInterval(progressInterval);
                     setTimeout(() => {
-                        // 開始核心運算並顯示結果
-                        executeMonteCarlo(totalN, quotaQ, userScore, maxScore, knowCutoff, cutoffScore, distMode, trials);
+                        executeMonteCarlo(totalN, qPlanned, qActual, userScore, maxScore, knowCutoff, cutoffScore, distMode, scoreResolution, trials);
                     }, 150);
                 }
             }, 60);
         }
 
-        // 核心蒙地卡羅執行體
-        function executeMonteCarlo(N, Q, U, MaxS, knowCutoff, Cutoff, distMode, trials) {
-            // 已知分數處理 (不包含 user)
+        // 核心蒙地卡羅執行體 (含同分增額邏輯與級距處理)
+        function executeMonteCarlo(N, Q_planned, Q_actual, U, MaxS, knowCutoff, Cutoff, distMode, scoreRes, trials) {
             const K = [...parsedOtherScores];
             const kCount = K.length;
             
-            // 貝氏數據均值融合：當已知分數樣本極少或具有選擇偏差時，結合合理的先驗值
-            const defaultMean = MaxS * 0.60; // 預設中間偏易 60%
+            // 貝氏平均值與標準差融合
+            const defaultMean = MaxS * 0.60;
             let kMean = getMean(K);
             if (kCount === 0) {
                 kMean = defaultMean;
             } else {
-                // 給預設平均值相當於 5 個樣本的先驗權重
                 kMean = (kMean * kCount + defaultMean * 5) / (kCount + 5);
             }
 
-            // 貝氏標準差融合：大考標準差通常落在 10%~15% 區間。
-            // 避免因極少已知樣本彼此極其接近，導致生成標準差收縮成 0 的嚴重偏差。
             const defaultStd = MaxS * 0.12; 
             let kStd = getStdDev(K, kMean);
             if (kCount < 2) {
                 kStd = defaultStd;
             } else {
-                // 給預設標準差相當於 8 個先驗樣本權重，融合出合理的母體擴散度
                 kStd = (kStd * kCount + defaultStd * 8) / (kCount + 8);
             }
-            // 強制約束標準差，確保隨機母體能產生合理的極端高分黑馬與極端低分
             kStd = Math.max(MaxS * 0.05, Math.min(MaxS * 0.22, kStd));
 
-            // --- 核心運算規模優化 ---
+            // 級距判定 (Score Resolution)
+            let step = 0.1;
+            if (scoreRes === 'auto') {
+                const allInputScores = [U, ...K];
+                let maxDecimals = 0;
+                allInputScores.forEach(s => {
+                    const str = s.toString();
+                    if (str.includes('.')) {
+                        const decimals = str.split('.')[1].length;
+                        if (decimals > maxDecimals) maxDecimals = decimals;
+                    }
+                });
+                if (maxDecimals === 0) step = 1.0;
+                else if (maxDecimals === 1) {
+                    const hasPointFiveOnly = allInputScores.every(s => s % 0.5 === 0);
+                    step = hasPointFiveOnly ? 0.5 : 0.1;
+                } else {
+                    step = 0.1;
+                }
+            } else if (scoreRes !== 'continuous') {
+                step = parseFloat(scoreRes);
+            }
+
+            // 四捨五入輔助函數
+            function roundScore(val) {
+                if (scoreRes === 'continuous') return Math.max(0, Math.min(MaxS, val));
+                return Math.max(0, Math.min(MaxS, Math.round(val / step) * step));
+            }
+
+            // 規模調節：控制 simN * trials 不超 300 萬以防卡死
             let simN = N;
-            let simQ = Q;
+            let simQ_planned = Q_planned;
+            let simQ_actual = Q_actual;
             let scaleFactor = 1;
             
-            // 運算量控制在 3,000,000 次操作以內，防止網頁無響應
             const maxTotalOperations = 3000000;
             if (N * trials > maxTotalOperations) {
                 simN = Math.min(N, Math.max(150, Math.floor(maxTotalOperations / trials)));
                 scaleFactor = N / simN;
-                simQ = Math.max(1, Math.round(Q / scaleFactor));
+                simQ_planned = Math.max(1, Math.round(Q_planned / scaleFactor));
+                simQ_actual = Math.max(simQ_planned, Math.round(Q_actual / scaleFactor));
             }
 
-            const simUnknownCount = simN - kCount - 1; // 扣除已知與自己
+            const simUnknownCount = simN - kCount - 1;
 
-            // --- 萬能平移校準：精準扣除剩餘名額 (Residual Quota Calibration) ---
+            // 萬能平移校準 (基於增額後之實際錄取名額，能完美貼合最終底線！)
             let shiftDelta = 0;
             if (knowCutoff) {
-                // 1. 真實規模下，已知分數中高於 Cutoff 的人數
-                const kAbove = K.filter(score => score > Cutoff).length;
-                // 2. 自己是否高於或等於 Cutoff (佔1個名額)
+                const kAbove = K.filter(score => score >= Cutoff).length;
                 const userAbove = U >= Cutoff ? 1 : 0;
                 
-                // 3. 剩餘需要由未知考生來搶的錄取名額
-                const qUnknown = Math.max(0, Q - kAbove - userAbove);
-                // 4. 真實規模下的未知考生總數
+                const qUnknown = Math.max(0, Q_actual - kAbove - userAbove);
                 const realUnknownCount = N - kCount - 1;
                 
-                // 未知考生高於 Cutoff 的期望目標比例
                 let targetProp = realUnknownCount > 0 ? (qUnknown / realUnknownCount) : 0;
-                targetProp = Math.max(0, Math.min(1, targetProp)); // 約束於合理區間
+                targetProp = Math.max(0, Math.min(1, targetProp));
 
-                // 產生 3,000 個基準隨機樣本
                 const calibrateBatch = [];
                 for (let i = 0; i < 3000; i++) {
                     calibrateBatch.push(generateBaseRandom(distMode, kMean, kStd, MaxS));
                 }
                 calibrateBatch.sort((a, b) => a - b);
                 
-                // 計算 (1 - targetProp) 的分位數，作為平移錨點
                 const targetPercentileValue = getPercentile(calibrateBatch, 1 - targetProp);
                 shiftDelta = Cutoff - targetPercentileValue;
             }
 
-            // 產生一個單次模擬的隨機數生成器（自動平移、約束上下限）
             function getCalibratedRandom() {
                 let s = generateBaseRandom(distMode, kMean, kStd, MaxS);
                 if (knowCutoff) {
                     s += shiftDelta;
                 }
-                return Math.max(0, Math.min(MaxS, s));
+                return roundScore(s);
             }
 
-            // 準備進行多回合蒙地卡羅模擬
+            // 進行蒙地卡羅模擬
             const simulatedRanks = new Array(trials);
             let passCount = 0;
             let sumCutoffScore = 0;
 
             for (let t = 0; t < trials; t++) {
-                // 1. 生成未知考生成績
+                // 1. 生成未知成績
                 const simulatedScores = [];
                 for (let i = 0; i < simUnknownCount; i++) {
                     simulatedScores.push(getCalibratedRandom());
                 }
 
-                // 2. 加上已知成績 K 與自己的成績 U
-                const fullPool = [...simulatedScores, ...K, U];
+                // 2. 結合已知 K 與 自己的 U (級距化)
+                const roundedK = K.map(s => roundScore(s));
+                const roundedU = roundScore(U);
+                const fullPool = [...simulatedScores, ...roundedK, roundedU];
 
-                // 3. 嚴謹的名次計算 (Scores strictly greater than user's + 1)
-                // 避免使用 indexOf() 導致在裁切同分時產生不對稱偏差
-                const strictlyHigherCount = fullPool.filter(score => score > U).length;
-                const myRank = strictlyHigherCount + 1;
-                
-                // 4. 等比例還原真實規模名次
-                const restoredRank = Math.max(1, Math.round(myRank * scaleFactor));
-                simulatedRanks[t] = restoredRank;
+                // 3. 排序 (降序)
+                fullPool.sort((a, b) => b - a);
 
-                // 判斷是否錄取
-                if (restoredRank <= Q) {
+                // 4. 定位原定錄取分數 (S_cutoff)
+                const cutoffIndex = Math.min(fullPool.length - 1, simQ_planned - 1);
+                const S_cutoff = fullPool[cutoffIndex];
+
+                // 5. 尋找與 S_cutoff 同分的左右端點 (L 為第一名, R 為最後一名)
+                let L = fullPool.indexOf(S_cutoff);
+                let R = fullPool.lastIndexOf(S_cutoff);
+
+                // 6. 條件同分束擬合：若有增額設定，同分區間必須往右擴展至至少 simQ_actual - 1 的端點
+                const targetR = Math.max(R, simQ_actual - 1);
+                for (let i = L; i <= targetR; i++) {
+                    if (i < fullPool.length) {
+                        fullPool[i] = S_cutoff; // 強制將名次內同分考生同化為 S_cutoff
+                    }
+                }
+
+                // 7. 判斷錄取 (在同分增額邏輯下，只要 >= S_cutoff 即可錄取)
+                const isAdmitted = roundedU >= S_cutoff;
+                if (isAdmitted) {
                     passCount++;
                 }
 
-                // 記錄每一回合的錄取門檻分數
-                const simCutoffIndex = Math.min(fullPool.length - 1, Math.round(simQ) - 1);
-                fullPool.sort((a, b) => b - a);
-                sumCutoffScore += fullPool[simCutoffIndex];
+                // 8. 嚴謹名次計算 (嚴格大於自己得分的人數 + 1)
+                const strictlyHigherCount = fullPool.filter(score => score > roundedU).length;
+                const myRank = strictlyHigherCount + 1;
+                
+                // 還原規模並寫入
+                const restoredRank = Math.max(1, Math.round(myRank * scaleFactor));
+                simulatedRanks[t] = restoredRank;
+
+                sumCutoffScore += S_cutoff;
             }
 
-            // --- 模擬結果統計 ---
+            // 統計
             simulatedRanks.sort((a, b) => a - b);
-            
-            // 預估最可能名次（取中位數名次）
             const medianRank = Math.round(getPercentile(simulatedRanks, 0.5));
-            // 估計 90% 置信區間 (第 5% 到 95% 區間)
             const rankLow = Math.round(getPercentile(simulatedRanks, 0.05));
             const rankHigh = Math.round(getPercentile(simulatedRanks, 0.95));
 
-            // 錄取機率
             const admissionProb = (passCount / trials) * 100;
-            
-            // 擊敗考生的比例
             const beatenPeople = Math.max(0, N - medianRank);
             const beatenRate = (beatenPeople / N) * 100;
 
-            // 估計最低錄取分數
             const finalCutoff = knowCutoff ? Cutoff : (sumCutoffScore / trials);
 
             // 保存分析包
             lastAnalysisResult = {
-                N, Q, U, MaxS, knowCutoff, Cutoff, distMode, trials,
+                N, Q_planned, Q_actual, U, MaxS, knowCutoff, Cutoff, distMode, trials, step, scoreRes,
                 medianRank, rankLow, rankHigh,
                 admissionProb, beatenPeople, beatenRate,
                 finalCutoff, kMean, kStd, K, shiftDelta,
                 getCalibratedRandom
             };
 
-            // 渲染結果到前端
             renderResults(lastAnalysisResult);
         }
 
-        // 標準基底隨機生成器（尚未校準平移）
         function generateBaseRandom(mode, mean, std, MaxS) {
             switch(mode) {
                 case 'normal':
@@ -723,11 +771,10 @@
 
         // --- 5. 數據渲染與視覺化 ---
         function renderResults(res) {
-            // 切換隱藏狀態
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('resultPanel').classList.remove('hidden');
 
-            // 1. 名次落點與區間
+            // 1. 名次落點
             document.getElementById('resRankRange').innerHTML = `第 <span class="text-3xl font-black text-indigo-600">${res.rankLow}</span> ~ <span class="text-3xl font-black text-indigo-600">${res.rankHigh}</span> 名`;
             document.getElementById('resAvgRank').innerText = `最可能排名：第 ${res.medianRank} 名 (全場排名前 ${(res.medianRank/res.N*100).toFixed(1)}%)`;
 
@@ -735,7 +782,6 @@
             const probText = res.admissionProb.toFixed(1);
             document.getElementById('resProbText').innerText = `${probText} %`;
             
-            // 錄取狀態徽章
             const badge = document.getElementById('resProbBadge');
             const ringColor = document.getElementById('resProbCircle');
             if (res.admissionProb >= 85) {
@@ -756,7 +802,6 @@
                 ringColor.className = "text-rose-500 transition-all duration-500";
             }
 
-            // 更新圓環
             document.getElementById('resProbCircle').setAttribute('stroke-dasharray', `${probText}, 100`);
             document.getElementById('resProbCircleText').innerText = `${Math.round(res.admissionProb)}%`;
 
@@ -764,42 +809,51 @@
             document.getElementById('resBeatenRate').innerText = `${res.beatenRate.toFixed(1)} %`;
             document.getElementById('resBeatenText').innerText = `領先全考場約 ${res.beatenPeople} 人`;
 
-            // 4. 圖例資訊
-            document.getElementById('infoAvg').innerText = `${res.kMean.toFixed(1)} 分`;
-            document.getElementById('infoStd').innerText = `${res.kStd.toFixed(1)} 分`;
+            // 4. 下方圖例統計
+            document.getElementById('infoStats').innerText = `${res.kMean.toFixed(1)} 分 / ${res.kStd.toFixed(1)} 分`;
             document.getElementById('infoCutoff').innerText = `${res.finalCutoff.toFixed(1)} 分`;
+            document.getElementById('infoQuota').innerText = `${res.Q_planned} / ${res.Q_actual} 人`;
             document.getElementById('infoTrials').innerText = `${res.trials.toLocaleString()} 次`;
 
-            // 5. 動態診斷分析文字
+            // 5. AI 分析報告
             const aiTextEl = document.getElementById('aiAnalysisText');
             let diagnosis = `<p>您的分數 <strong>${res.U} 分</strong>，相對於您設定的模擬條件做出了以下評估：</p>`;
             
+            // 是否有增額
+            const tieDiff = res.Q_actual - res.Q_planned;
+            let tieDesc = "";
+            if (tieDiff > 0) {
+                tieDesc = `（已考量 <strong>${tieDiff} 名同分增額名額</strong>）`;
+            }
+
             if (res.U >= res.finalCutoff) {
                 const margin = res.U - res.finalCutoff;
-                diagnosis += `<p>🟢 您的分數目前 <strong>領先錄取線約 ${margin.toFixed(1)} 分</strong>。在 <strong>${res.trials.toLocaleString()} 次</strong> 重組考生的蒙地卡羅大數據演算法中，您的上榜率達到了 <strong>${res.admissionProb.toFixed(1)}%</strong>。此條件下您的表現相當穩健，名次預估將落在第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名之間。</p>`;
+                diagnosis += `<p>🟢 您的分數目前 <strong>領先錄取線約 ${margin.toFixed(1)} 分</strong>。在 <strong>${res.trials.toLocaleString()} 次</strong> 蒙地卡羅同分大數據分發模擬下，您的上榜率達到了 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。您的名次落點預估為第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名。</p>`;
             } else {
                 const margin = res.finalCutoff - res.U;
-                diagnosis += `<p>🔴 您的分數目前 <strong>落後估計錄取線約 ${margin.toFixed(1)} 分</strong>。在模擬中（共執行 <strong>${res.trials.toLocaleString()} 次</strong> 隨機抽樣演算），您的錄取機會大約是 <strong>${res.admissionProb.toFixed(1)}%</strong>。名次區間預估將落在第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名之間。</p>`;
+                diagnosis += `<p>🔴 您的分數目前 <strong>落後估計錄取線約 ${margin.toFixed(1)} 分</strong>。在模擬中，您的錄取機會大約是 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。名次區間預估將落在第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名之間。</p>`;
+            }
+
+            if (res.scoreRes !== 'continuous') {
+                diagnosis += `<p>📐 系統已自動將模擬考生分數四捨五入至 <strong>${res.step} 分（級距）</strong>，這使得模擬能更擬真地在邊界產生同分群，提供極致準確的名次聚合度。</p>`;
             }
 
             if (res.K.length > 0) {
-                diagnosis += `<p>📊 本次模擬已深度參考您貼上的 <strong>${res.K.length} 筆已知考生分數</strong>。這大幅降低了隨機生成的誤差。若能提供更多已知分數，名次區間將收斂得更加精準。</p>`;
+                diagnosis += `<p>📊 本次模擬已深度參考您貼上的 <strong>${res.K.length} 筆已知考生分數</strong>，進行貝氏偏差修正。若能提供更多已知分數，名次區間將收斂得更加精準。</p>`;
             } else {
-                diagnosis += `<p>💡 您目前「沒有」提供任何其他已知考生分數，故此結果純粹依賴「${DIST_DESCRIPTIONS[res.distMode].split('：')[0]}」的機率分佈與貝氏融合標準差進行統計，名次區間可能較寬，若有幾筆同學的分數建議立刻補貼上進行二次校準！</p>`;
+                diagnosis += `<p>💡 您目前「沒有」提供任何其他已知考生分數，故名次區間會較寬。若有幾位同學的分數建議立刻補貼上進行二次校準！</p>`;
             }
 
             aiTextEl.innerHTML = diagnosis;
 
-            // 6. 繪製 Canvas 圖表
+            // 6. 繪製畫布
             drawResultChart(res);
         }
 
-        // --- 6. Canvas 頂級繪製功能 ---
+        // --- 6. Canvas 繪製功能 ---
         function clearCanvas() {
             const canvas = document.getElementById('distCanvas');
             const ctx = canvas.getContext('2d');
-            
-            // 處理 Retina 高DPI
             const rect = canvas.getBoundingClientRect();
             canvas.width = rect.width * window.devicePixelRatio;
             canvas.height = rect.height * window.devicePixelRatio;
@@ -820,20 +874,17 @@
             const width = rect.width;
             const height = rect.height;
             
-            // Retina 高動態優化
             canvas.width = width * window.devicePixelRatio;
             canvas.height = height * window.devicePixelRatio;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
             ctx.clearRect(0, 0, width, height);
 
-            // 定義圖表四周邊界 (Padding)
             const padding = { top: 35, right: 30, bottom: 40, left: 50 };
             const chartWidth = width - padding.left - padding.right;
             const chartHeight = height - padding.top - padding.bottom;
 
-            // 1. 為了繪製完美的整體密度曲線，我們構建一個代表性的 8000 人大樣本 (KDE Population Reconstruction)
-            // 將未知隨機數、已知分數 K 與您自己的分數 U 按等比例還原到圖中，這能完美呈现包含您在內的真實全體分佈。
+            // 構建 KDE 大樣本 (KDE Population Reconstruction)
             const tempSamples = [];
             const simN_chart = 8000;
             
@@ -841,31 +892,25 @@
             const uCount_chart = Math.round((1 / res.N) * simN_chart);
             const unknownCount_chart = simN_chart - kCount_chart - uCount_chart;
             
-            // 加入未知模擬考生
             for (let i = 0; i < unknownCount_chart; i++) {
                 tempSamples.push(res.getCalibratedRandom());
             }
-            // 加入已知考生（等比例）
             if (res.K.length > 0) {
                 for (let i = 0; i < kCount_chart; i++) {
                     const randomK = res.K[Math.floor(Math.random() * res.K.length)];
                     tempSamples.push(randomK);
                 }
             }
-            // 加入自己分數（等比例）
             for (let i = 0; i < Math.max(1, uCount_chart); i++) {
                 tempSamples.push(res.U);
             }
 
-            // KDE 參數設定 (Bandwidth)
             const bw = res.kStd * 0.22;
 
-            // 高斯核函數
             function gaussianKernel(x) {
                 return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
             }
 
-            // KDE 密度計算
             function getKDE(val) {
                 let sum = 0;
                 for (let i = 0; i < tempSamples.length; i++) {
@@ -874,7 +919,6 @@
                 return sum / (tempSamples.length * bw);
             }
 
-            // 產生用於繪製「平滑密度曲線」的數值數據
             const pointsCount = 120;
             const xs = [];
             const ys = [];
@@ -884,10 +928,8 @@
                 ys.push(getKDE(score));
             }
 
-            // 找出 Y 軸最大值
             const maxY = Math.max(...ys) * 1.15;
 
-            // 座標轉換輔助函數
             function getXPix(score) {
                 return padding.left + (score / res.MaxS) * chartWidth;
             }
@@ -895,7 +937,7 @@
                 return padding.top + chartHeight - (density / maxY) * chartHeight;
             }
 
-            // 2. 繪製背景網格線
+            // 水平網格線
             ctx.strokeStyle = '#f1f5f9';
             ctx.lineWidth = 1;
             for (let i = 1; i <= 5; i++) {
@@ -906,10 +948,9 @@
                 ctx.stroke();
             }
 
-            // 3. 繪製曲線與著色區塊 (區分「錄取區」與「未錄取區」)
             const cutoffX = res.finalCutoff;
             
-            // --- 著色：未錄取區 ---
+            // 著色：未錄取區
             ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
             ctx.beginPath();
             ctx.moveTo(getXPix(0), getYPix(0));
@@ -923,7 +964,7 @@
             ctx.closePath();
             ctx.fill();
 
-            // --- 著色：已錄取區 ---
+            // 著色：已錄取區
             const greenGradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
             greenGradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
             greenGradient.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
@@ -947,7 +988,7 @@
             ctx.closePath();
             ctx.fill();
 
-            // 4. 繪製外圍分佈線
+            // 繪製外圍分佈線
             ctx.strokeStyle = '#6366f1';
             ctx.lineWidth = 2.5;
             ctx.beginPath();
@@ -957,7 +998,7 @@
             }
             ctx.stroke();
 
-            // 5. 繪製 X 軸與 Y 軸底線
+            // 軸底線
             ctx.strokeStyle = '#cbd5e1';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -965,7 +1006,7 @@
             ctx.lineTo(width - padding.right, padding.top + chartHeight);
             ctx.stroke();
 
-            // 6. 繪製 X 軸刻度標籤
+            // 刻度
             ctx.fillStyle = '#64748b';
             ctx.font = '10px "Noto Sans TC"';
             ctx.textAlign = 'center';
@@ -980,7 +1021,7 @@
                 ctx.stroke();
             }
 
-            // 7. 標註「錄取 cutoff 線」
+            // 標註錄取 cutoff 線
             ctx.strokeStyle = '#f43f5e';
             ctx.lineWidth = 1.5;
             ctx.setLineDash([4, 4]);
@@ -990,14 +1031,13 @@
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // 錄取線標籤
             ctx.fillStyle = '#e11d48';
             ctx.font = 'bold 10px "Noto Sans TC"';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
             ctx.fillText(`最低錄取: ${cutoffX.toFixed(1)}分`, getXPix(cutoffX), padding.top - 8);
 
-            // 8. 標註「您自己的分數 U」
+            // 標註「您自己的分數 U」
             const myX = getXPix(res.U);
             ctx.strokeStyle = '#10b981';
             ctx.lineWidth = 2.5;
@@ -1006,13 +1046,11 @@
             ctx.lineTo(myX, padding.top + chartHeight);
             ctx.stroke();
 
-            // 自己的分數點
             ctx.fillStyle = '#10b981';
             ctx.beginPath();
             ctx.arc(myX, getYPix(getKDE(res.U)), 5, 0, Math.PI * 2);
             ctx.fill();
 
-            // 自己的分數標籤 (若與錄取分數重疊，則微調位置避免撞在一起)
             ctx.fillStyle = '#047857';
             ctx.font = 'bold 11px "Noto Sans TC"';
             const textOffset = Math.abs(res.U - cutoffX) < (res.MaxS * 0.06) ? (res.U < cutoffX ? -28 : 28) : 0;
@@ -1020,7 +1058,7 @@
             ctx.textBaseline = 'bottom';
             ctx.fillText(`您的分數: ${res.U}分`, myX + textOffset, padding.top - 20);
 
-            // 9. 標註「已知其他考生分數 K」
+            // 標註「已知其他考生分數 K」
             if (res.K.length > 0) {
                 res.K.forEach(score => {
                     const kX = getXPix(score);
@@ -1031,7 +1069,7 @@
                 });
             }
 
-            // 10. 右下角強浮水印免責聲明
+            // 右下角強浮水印
             ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
             ctx.font = '9px "Noto Sans TC"';
             ctx.textAlign = 'right';
