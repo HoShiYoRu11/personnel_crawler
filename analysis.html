@@ -174,7 +174,7 @@
                             placeholder="例如：
 85, 74, 91
 62
-55, 78, 88 (可用逗號、空格或換行分隔)"></textarea>
+55, 78, 88 (可用逗號、空格 or 換行分隔)"></textarea>
                         <p class="text-[11px] text-slate-400 mt-1">⚠️ 提示：若只有幾十人的分數，直接貼上即可，其餘未知名額將自動交由電腦隨機模擬。</p>
                     </div>
 
@@ -332,7 +332,7 @@
         // --- 1. 全域狀態與常數 ---
         const DIST_DESCRIPTIONS = {
             normal: "常態分佈 (Normal)：分數會自然地集中在中間值，向高低分兩端對稱且平滑地遞減（鐘形曲線）。",
-            uniform: "均勻分佈 (Uniform)：各分數區段人數相當，無集中特徵，所有人得高分或低分的機率是平均的。",
+            uniform: "均勻分佈 (Uniform)：各分數區段人數相當，無集中特徵，所有人得高分 or 低分的機率是平均的。",
             triangular: "三角形分佈 (Triangular)：兩側呈現線性遞減，能自由定義並聚焦於人群最集中的頂峰（眾數）區間。",
             bimodal: "雙峰分佈 (Bimodal)：雙極化特徵，呈現高分群與低分群兩個聚落，中間段分數的人數極少。"
         };
@@ -441,6 +441,7 @@
             }
         }
 
+        // 統計輔助
         function getMean(arr) {
             if (!arr.length) return 0;
             return arr.reduce((acc, val) => acc + val, 0) / arr.length;
@@ -467,11 +468,12 @@
         function initEventHandlers() {
             document.getElementById('btnSimulate').addEventListener('click', runSimulation);
             
-            // 雙向防呆：確保 原定名額 <= 實際名額
             const qPlannedInput = document.getElementById('quotaPlanned');
             const qActualInput = document.getElementById('quotaActual');
 
-            qPlannedInput.addEventListener('input', () => {
+            // ⚠️ 體驗升級：將 'input' 事件改為 'blur' (失去焦點) 事件。
+            // 這能確保使用者打字修改的途中 (例如暫時刪成個位數 2)，不會立刻干預並修改隔壁欄位。
+            qPlannedInput.addEventListener('blur', () => {
                 const pVal = parseInt(qPlannedInput.value) || 0;
                 const aVal = parseInt(qActualInput.value) || 0;
                 if (aVal < pVal) {
@@ -479,7 +481,7 @@
                 }
             });
 
-            qActualInput.addEventListener('input', () => {
+            qActualInput.addEventListener('blur', () => {
                 const pVal = parseInt(qPlannedInput.value) || 0;
                 const aVal = parseInt(qActualInput.value) || 0;
                 if (aVal < pVal) {
@@ -508,7 +510,7 @@
             const scoreResolution = document.getElementById('scoreResolution').value;
             const trials = parseInt(document.getElementById('simTrials').value) || 1000;
 
-            // 基本檢驗與防呆
+            // 基本檢驗與防呆 (終極提交防呆，點按按鈕時進行終極同步)
             if (isNaN(totalN) || totalN < 10) {
                 showToast("考試總人數必須大於 10 人", "error");
                 return;
@@ -569,12 +571,12 @@
             }, 60);
         }
 
-        // 核心蒙地卡羅執行體 (含同分增額邏輯與級距處理)
+        // 核心蒙地卡羅執行體
         function executeMonteCarlo(N, Q_planned, Q_actual, U, MaxS, knowCutoff, Cutoff, distMode, scoreRes, trials) {
             const K = [...parsedOtherScores];
             const kCount = K.length;
             
-            // 貝氏平均值與標準差融合
+            // 貝氏平均與標準差融合
             const defaultMean = MaxS * 0.60;
             let kMean = getMean(K);
             if (kCount === 0) {
@@ -621,7 +623,7 @@
                 return Math.max(0, Math.min(MaxS, Math.round(val / step) * step));
             }
 
-            // 規模調節：控制 simN * trials 不超 300 萬以防卡死
+            // 規模調節 (限制總運算量)
             let simN = N;
             let simQ_planned = Q_planned;
             let simQ_actual = Q_actual;
@@ -637,7 +639,7 @@
 
             const simUnknownCount = simN - kCount - 1;
 
-            // 萬能平移校準 (基於增額後之實際錄取名額，能完美貼合最終底線！)
+            // 萬能平移校準 (擬合錄取底線)
             let shiftDelta = 0;
             if (knowCutoff) {
                 const kAbove = K.filter(score => score >= Cutoff).length;
@@ -679,7 +681,7 @@
                     simulatedScores.push(getCalibratedRandom());
                 }
 
-                // 2. 結合已知 K 與 自己的 U (級距化)
+                // 2. 結合已知與自己
                 const roundedK = K.map(s => roundScore(s));
                 const roundedU = roundScore(U);
                 const fullPool = [...simulatedScores, ...roundedK, roundedU];
@@ -691,29 +693,28 @@
                 const cutoffIndex = Math.min(fullPool.length - 1, simQ_planned - 1);
                 const S_cutoff = fullPool[cutoffIndex];
 
-                // 5. 尋找與 S_cutoff 同分的左右端點 (L 為第一名, R 為最後一名)
+                // 5. 尋找與 S_cutoff 同分的端點
                 let L = fullPool.indexOf(S_cutoff);
                 let R = fullPool.lastIndexOf(S_cutoff);
 
-                // 6. 條件同分束擬合：若有增額設定，同分區間必須往右擴展至至少 simQ_actual - 1 的端點
+                // 6. 條件同分束擬合
                 const targetR = Math.max(R, simQ_actual - 1);
                 for (let i = L; i <= targetR; i++) {
                     if (i < fullPool.length) {
-                        fullPool[i] = S_cutoff; // 強制將名次內同分考生同化為 S_cutoff
+                        fullPool[i] = S_cutoff; 
                     }
                 }
 
-                // 7. 判斷錄取 (在同分增額邏輯下，只要 >= S_cutoff 即可錄取)
+                // 7. 判斷錄取 (同分增額邏輯下，只要 >= S_cutoff 即可錄取)
                 const isAdmitted = roundedU >= S_cutoff;
                 if (isAdmitted) {
                     passCount++;
                 }
 
-                // 8. 嚴謹名次計算 (嚴格大於自己得分的人數 + 1)
-                const strictlyHigherCount = fullPool.filter(score => score > roundedU).length;
-                const myRank = strictlyHigherCount + 1;
+                // 8. 嚴謹名次計算
+                const DOCstrictlyHigherCount = fullPool.filter(score => score > roundedU).length;
+                const myRank = DOCstrictlyHigherCount + 1;
                 
-                // 還原規模並寫入
                 const restoredRank = Math.max(1, Math.round(myRank * scaleFactor));
                 simulatedRanks[t] = restoredRank;
 
@@ -732,7 +733,7 @@
 
             const finalCutoff = knowCutoff ? Cutoff : (sumCutoffScore / trials);
 
-            // 保存分析包
+            // 保存分析結果
             lastAnalysisResult = {
                 N, Q_planned, Q_actual, U, MaxS, knowCutoff, Cutoff, distMode, trials, step, scoreRes,
                 medianRank, rankLow, rankHigh,
@@ -819,7 +820,6 @@
             const aiTextEl = document.getElementById('aiAnalysisText');
             let diagnosis = `<p>您的分數 <strong>${res.U} 分</strong>，相對於您設定的模擬條件做出了以下評估：</p>`;
             
-            // 是否有增額
             const tieDiff = res.Q_actual - res.Q_planned;
             let tieDesc = "";
             if (tieDiff > 0) {
@@ -884,7 +884,7 @@
             const chartWidth = width - padding.left - padding.right;
             const chartHeight = height - padding.top - padding.bottom;
 
-            // 構建 KDE 大樣本 (KDE Population Reconstruction)
+            // 構建 KDE 大樣本
             const tempSamples = [];
             const simN_chart = 8000;
             
@@ -1021,7 +1021,7 @@
                 ctx.stroke();
             }
 
-            // 標註錄取 cutoff 線
+            // 標註最低錄取線
             ctx.strokeStyle = '#f43f5e';
             ctx.lineWidth = 1.5;
             ctx.setLineDash([4, 4]);
