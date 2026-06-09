@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教甄成績落點與複試模擬分析器</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 滾動條美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100,116,139,0.4);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100,116,139,0.6);
+        }
+
+        /* 雙向固定標頭的 CSS 魔法 */
+        .matrix-container {
+            position: relative;
+            max-height: 580px;
+            overflow: auto;
+        }
+        .sticky-corner {
+            position: sticky;
+            top: 0;
+            left: 0;
+            z-index: 30;
+        }
+        .sticky-row {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
+
+    <!-- 頂部導覽列 -->
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600 rounded-lg text-white">
+                    <!-- SVG 標誌：計算機/圖表簡化版 -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight">教甄落點與成績模擬器</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">筆試、試教、口試三合一落點即時動態分析</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <!-- 分享按鈕 -->
+                <button id="btnShare" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors flex items-center space-x-1 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 10.748a3.001 3.001 0 110 3.704m-1.938-1.852a3 3 0 10-.001-.002m0 0l5.828-3.047m0 0a3.001 3.001 0 114.753 2.01M12.114 12l5.83 3.048" />
+                    </svg>
+                    <span class="hidden sm:inline">複製分享連結</span>
+                </button>
+                
+                <!-- 深淺色切換 -->
+                <button id="themeToggle" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors">
+                    <!-- 太陽 (淺色) -->
+                    <svg id="themeSun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m2.828 9.9a5 5 0 117.07 0l2.828-2.828m-11.314 0l-2.828-2.828" />
+                    </svg>
+                    <!-- 月亮 (深色) -->
+                    <svg id="themeMoon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        
+        <!-- 通知橫幅 (用於顯示訊息而非 alert) -->
+        <div id="toast" class="fixed top-20 right-4 sm:right-8 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-lg shadow-xl flex items-center space-x-2 transition-all duration-300 transform translate-y-[-100px] opacity-0 z-50">
+            <span id="toastMsg" class="text-sm font-medium">複製成功！已將參數加入連結。</span>
+        </div>
+
+        <!-- 說明與介紹 -->
+        <div class="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden">
+            <div class="absolute right-4 bottom-0 opacity-10 pointer-events-none">
+                <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
+                </svg>
+            </div>
+            <h2 class="text-xl font-bold text-indigo-900 dark:text-indigo-400 flex items-center space-x-2 mb-2">
+                <span>🎯 教師甄試落點分析邏輯與指引</span>
+            </h2>
+            <p class="text-slate-600 dark:text-slate-300 text-sm leading-relaxed max-w-4xl">
+                歡迎使用教甄複試落點分析器！本系統專為教師甄選考生打造。考完筆試後，複試的「試教」與「口試」成績普遍介於 <strong>70 到 90 分</strong> 之間。
+                您只需於下方輸入您的複試<b>權重配分比例</b>以及<b>您目前的實際成績</b>。系統將自動計算出您的個人總分，並生動產出一張 21x21 的二維決策分析矩陣。
+                當試教與口試分別獲得不同分數時，表格會即時顯示：<b>您的筆試成績「至少需要多少分（無條件進位至 0.5 分）」才能追平或擊敗您當前的分數</b>，幫您精準抓出容錯率！
+            </p>
+        </div>
+
+        <!-- 第一部分：參數設定 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- 左欄：權重比例配分 (佔 5 欄) -->
+            <div class="lg:col-span-5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="font-bold text-lg flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                            <span>第一步：自訂項目權重比例</span>
+                        </h3>
+                        <span id="weightSumBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500">
+                            總和 100%
+                        </span>
+                    </div>
+
+                    <!-- 預設組合選擇 -->
+                    <div class="mb-6">
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">快速套用常見權重組合</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="applyPreset(40, 30, 30)" class="preset-btn px-3 py-2 text-xs font-medium border border-slate-200 dark:border-slate-800 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all text-left">
+                                <div class="font-bold">組合 A (標準)</div>
+                                <div class="text-slate-400 text-[10px]">筆 40% | 試 30% | 口 30%</div>
+                            </button>
+                            <button onclick="applyPreset(30, 40, 30)" class="preset-btn px-3 py-2 text-xs font-medium border border-slate-200 dark:border-slate-800 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all text-left">
+                                <div class="font-bold">組合 B (重試教)</div>
+                                <div class="text-slate-400 text-[10px]">筆 30% | 試 40% | 口 30%</div>
+                            </button>
+                            <button onclick="applyPreset(20, 40, 40)" class="preset-btn px-3 py-2 text-xs font-medium border border-slate-200 dark:border-slate-800 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all text-left">
+                                <div class="font-bold">組合 C (重複試)</div>
+                                <div class="text-slate-400 text-[10px]">筆 20% | 試 40% | 口 40%</div>
+                            </button>
+                            <button onclick="applyPreset(50, 25, 25)" class="preset-btn px-3 py-2 text-xs font-medium border border-slate-200 dark:border-slate-800 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all text-left">
+                                <div class="font-bold">組合 D (重筆試)</div>
+                                <div class="text-slate-400 text-[10px]">筆 50% | 試 25% | 口 25%</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 權重輸入 -->
+                    <div class="space-y-4">
+                        <!-- 筆試權重 -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="weightW" class="text-sm font-medium text-slate-700 dark:text-slate-300">筆試成績權重 (%)</label>
+                                <span class="text-xs text-indigo-500 font-bold" id="weightWVal">40%</span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <input type="range" id="weightW" min="5" max="90" value="40" class="flex-1 accent-indigo-600 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                                <input type="number" id="weightWNum" min="5" max="90" value="40" class="w-16 px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-800 rounded bg-transparent font-semibold">
+                            </div>
+                        </div>
+
+                        <!-- 試教權重 -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="weightT" class="text-sm font-medium text-slate-700 dark:text-slate-300">試教成績權重 (%)</label>
+                                <span class="text-xs text-indigo-500 font-bold" id="weightTVal">30%</span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <input type="range" id="weightT" min="5" max="90" value="30" class="flex-1 accent-indigo-600 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                                <input type="number" id="weightTNum" min="5" max="90" value="30" class="w-16 px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-800 rounded bg-transparent font-semibold">
+                            </div>
+                        </div>
+
+                        <!-- 口試權重 -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label for="weightO" class="text-sm font-medium text-slate-700 dark:text-slate-300">口試成績權重 (%)</label>
+                                <span class="text-xs text-indigo-500 font-bold" id="weightOVal">30%</span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <input type="range" id="weightO" min="5" max="90" value="30" class="flex-1 accent-indigo-600 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                                <input type="number" id="weightONum" min="5" max="90" value="30" class="w-16 px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-800 rounded bg-transparent font-semibold">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 權重警示訊息 -->
+                <div id="weightWarning" class="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-xs flex items-start space-x-2 hidden">
+                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>注意：目前權重總和為 <span id="weightSumText" class="font-bold">100</span>%。設定必須等於 100% 才能正確計算表格。</span>
+                </div>
+            </div>
+
+            <!-- 右欄：我的實際成績與目標設定 (佔 7 欄) -->
+            <div class="lg:col-span-7 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                    <h3 class="font-bold text-lg flex items-center space-x-2 mb-6">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                        <span>第二步：輸入您目前成績（基準）</span>
+                    </h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <!-- 筆試目前成績 -->
+                        <div class="space-y-2">
+                            <label for="scoreW" class="block text-sm font-medium text-slate-700 dark:text-slate-300">目前筆試成績</label>
+                            <input type="number" id="scoreW" min="0" max="100" step="0.5" value="75" class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-indigo-600 dark:text-indigo-400 text-lg">
+                            <p class="text-[10px] text-slate-400">比例得分：<span id="weightedWScore">30.00</span>分</p>
+                        </div>
+                        
+                        <!-- 試教目前成績 -->
+                        <div class="space-y-2">
+                            <label for="scoreT" class="block text-sm font-medium text-slate-700 dark:text-slate-300">目前試教成績</label>
+                            <input type="number" id="scoreT" min="0" max="100" step="0.5" value="80" class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-indigo-600 dark:text-indigo-400 text-lg">
+                            <p class="text-[10px] text-slate-400">比例得分：<span id="weightedTScore">24.00</span>分</p>
+                        </div>
+
+                        <!-- 口試目前成績 -->
+                        <div class="space-y-2">
+                            <label for="scoreO" class="block text-sm font-medium text-slate-700 dark:text-slate-300">目前口試成績</label>
+                            <input type="number" id="scoreO" min="0" max="100" step="0.5" value="82" class="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-indigo-600 dark:text-indigo-400 text-lg">
+                            <p class="text-[10px] text-slate-400">比例得分：<span id="weightedOScore">24.60</span>分</p>
+                        </div>
+                    </div>
+
+                    <!-- 計算目標標準 -->
+                    <div class="border-t border-dashed border-slate-200 dark:border-slate-800 pt-6">
+                        <label class="block text-sm font-semibold mb-3">落點比較目標設定：</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <label class="relative flex items-center p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                                <input type="radio" name="compareMode" value="equal" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 accent-indigo-600">
+                                <div class="ml-3">
+                                    <span class="block text-sm font-bold">追平目前的自己 (≥)</span>
+                                    <span class="block text-xs text-slate-400">總成績大於或等於目前的總分數</span>
+                                </div>
+                            </label>
+
+                            <label class="relative flex items-center p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                                <input type="radio" name="compareMode" value="greater" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 accent-indigo-600">
+                                <div class="ml-3">
+                                    <span class="block text-sm font-bold">絕對超越目前的自己 (&gt;)</span>
+                                    <span class="block text-xs text-slate-400">總成績必須嚴格大於目前的總分數</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 個人總成績展示板 -->
+                <div class="mt-6 p-4 bg-gradient-to-br from-indigo-900 to-slate-950 text-white rounded-2xl flex flex-col sm:flex-row items-center justify-between shadow-md">
+                    <div class="mb-3 sm:mb-0 text-center sm:text-left">
+                        <p class="text-indigo-300 text-xs font-semibold uppercase tracking-wider">基準總成績計算結果</p>
+                        <h4 class="text-lg font-bold">您的目前基準總分數</h4>
+                    </div>
+                    <div class="text-center sm:text-right">
+                        <span id="currentTotal" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-indigo-300">78.60</span>
+                        <span class="text-sm font-medium text-slate-300 ml-1">分</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 第二部分：動態熱圖矩陣與詳情 -->
+        <div id="resultsWrapper" class="space-y-6">
+            
+            <!-- 上控制條與當前懸停動態分析 -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                <!-- 狀態與懸停分析卡片 -->
+                <div class="lg:col-span-8 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">💡 動態決策卡片（將游標移到下方表格看分析）</h4>
+                        <div id="analysisPanel" class="text-slate-600 dark:text-slate-300 space-y-2 py-1">
+                            <p class="text-sm font-medium flex items-center text-indigo-500">
+                                <svg class="w-5 h-5 mr-1.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                點擊或滑鼠滑過下表任何一格：
+                            </p>
+                            <p class="text-base text-slate-800 dark:text-slate-100 font-medium">
+                                了解在該「口試」與「試教」分數下，筆試至少需要考多少，才能突破現狀！
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 圖例與控制項 -->
+                <div class="lg:col-span-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">🎨 難易度圖例</h4>
+                            <button id="btnExport" class="px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition-colors flex items-center space-x-1 font-semibold">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <span>匯出 CSV 報表</span>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-teal-500/20 text-teal-500 font-bold border border-teal-500/10 flex items-center justify-center text-[10px]">0.0</span>
+                                <span>無壓力過關 (0.0分)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-emerald-500/20 text-emerald-500 border border-emerald-500/10 flex items-center justify-center text-[10px]">60</span>
+                                <span>輕鬆過關 (&le;60.0分)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-blue-500/20 text-blue-500 border border-blue-500/10 flex items-center justify-center text-[10px]">75</span>
+                                <span>一般難度 (60.5~80.0)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/10 flex items-center justify-center text-[10px]">85</span>
+                                <span>偏難挑戰 (80.5~90.0)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-orange-500/20 text-orange-500 border border-orange-500/10 flex items-center justify-center text-[10px]">95</span>
+                                <span>極高難度 (90.5~100.0)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3.5 h-3.5 rounded bg-red-500/20 text-red-500 border border-red-500/10 flex items-center justify-center text-[10px]">❌</span>
+                                <span>無法達成 (&gt;100.0分)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主矩陣表格卡片 -->
+            <div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                
+                <!-- 表格頂端方向指引 -->
+                <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center">
+                            <span>📊 筆試落點分析矩陣 (無條件進位至0.5分)</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1">橫軸為試教成績 (70 ~ 90 分)；縱軸為口試成績 (70 ~ 90 分)</p>
+                    </div>
+                    <!-- 高亮鎖定提示 -->
+                    <span class="text-xs bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-full">
+                        💡 滑鼠移至格子可自動高亮十字軸線
+                    </span>
+                </div>
+
+                <!-- 矩陣容器 -->
+                <div class="matrix-container max-w-full" id="matrixContainer">
+                    <table class="w-full text-center border-collapse table-fixed min-w-[1200px]" id="matrixTable">
+                        <!-- 表頭將由 JS 動態生成 -->
+                        <thead>
+                            <!-- 動態生成 -->
+                        </thead>
+                        <tbody>
+                            <!-- 動態生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 py-8 bg-white dark:bg-slate-950 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 space-y-2">
+            <p>教甄筆試、試教、口試成績模擬器 - 以1分為級距動態運算呈現</p>
+            <p>小提示：點選上方的「複製分享連結」，會將您當前輸入的所有成績、權重參數，保存在網址中以便分享給朋友或記錄留存。</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript 邏輯 -->
+    <script>
+        // 初始化 Firebase / App ID 等全域變數 (若有的話)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-exam-simulator';
+
+        // 綁定 DOM 元素
+        const weightWInput = document.getElementById('weightW');
+        const weightWNum = document.getElementById('weightWNum');
+        const weightWValText = document.getElementById('weightWVal');
+
+        const weightTInput = document.getElementById('weightT');
+        const weightTNum = document.getElementById('weightTNum');
+        const weightTValText = document.getElementById('weightTVal');
+
+        const weightOInput = document.getElementById('weightO');
+        const weightONum = document.getElementById('weightONum');
+        const weightOValText = document.getElementById('weightOVal');
+
+        const scoreWInput = document.getElementById('scoreW');
+        const scoreTInput = document.getElementById('scoreT');
+        const scoreOInput = document.getElementById('scoreO');
+
+        const weightedWScoreSpan = document.getElementById('weightedWScore');
+        const weightedTScoreSpan = document.getElementById('weightedTScore');
+        const weightedOScoreSpan = document.getElementById('weightedOScore');
+
+        const weightSumBadge = document.getElementById('weightSumBadge');
+        const weightWarning = document.getElementById('weightWarning');
+        const weightSumText = document.getElementById('weightSumText');
+        const currentTotalSpan = document.getElementById('currentTotal');
+
+        const matrixTable = document.getElementById('matrixTable');
+        const analysisPanel = document.getElementById('analysisPanel');
+        const btnShare = document.getElementById('btnShare');
+        const btnExport = document.getElementById('btnExport');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+
+        // 主題切換按鈕
+        const themeToggle = document.getElementById('themeToggle');
+        const themeSun = document.getElementById('themeSun');
+        const themeMoon = document.getElementById('themeMoon');
+
+        // 深淺色模式控制
+        function initTheme() {
+            if (localStorage.getItem('theme') === 'light' || 
+                (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+                document.documentElement.classList.remove('dark');
+                themeSun.classList.remove('hidden');
+                themeMoon.classList.add('hidden');
+            } else {
+                document.documentElement.classList.add('dark');
+                themeSun.classList.add('hidden');
+                themeMoon.classList.remove('hidden');
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                themeSun.classList.remove('hidden');
+                themeMoon.classList.add('hidden');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                themeSun.classList.add('hidden');
+                themeMoon.classList.remove('hidden');
+            }
+        });
+
+        // 參數雙向同步
+        function setupDualInput(slider, num, updateCallback) {
+            slider.addEventListener('input', (e) => {
+                num.value = e.target.value;
+                updateCallback();
+            });
+            num.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value) || 0;
+                if (val < parseInt(slider.min)) val = parseInt(slider.min);
+                if (val > parseInt(slider.max)) val = parseInt(slider.max);
+                slider.value = val;
+                e.target.value = val;
+                updateCallback();
+            });
+        }
+
+        // 提示訊息 (Toast) 顯示函式
+        function showToast(msg, duration = 3000) {
+            toastMsg.innerText = msg;
+            toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, duration);
+        }
+
+        // 常見組合套用
+        function applyPreset(w, t, o) {
+            weightWInput.value = w;
+            weightWNum.value = w;
+            weightTInput.value = t;
+            weightTNum.value = t;
+            weightOInput.value = o;
+            weightONum.value = o;
+            
+            // 重新計算並渲染
+            calculateAndRender();
+            showToast(`已套用：筆試 ${w}%、試教 ${t}%、口試 ${o}%`);
+        }
+
+        // 雙向同步初始化
+        setupDualInput(weightWInput, weightWNum, calculateAndRender);
+        setupDualInput(weightTInput, weightTNum, calculateAndRender);
+        setupDualInput(weightOInput, weightONum, calculateAndRender);
+
+        scoreWInput.addEventListener('input', calculateAndRender);
+        scoreTInput.addEventListener('input', calculateAndRender);
+        scoreOInput.addEventListener('input', calculateAndRender);
+
+        document.querySelectorAll('input[name="compareMode"]').forEach(radio => {
+            radio.addEventListener('change', calculateAndRender);
+        });
+
+        // 讀取 URL Hash 來恢復狀態
+        function loadStateFromHash() {
+            const hash = window.location.hash.substring(1);
+            if (!hash) return false;
+            try {
+                const params = new URLSearchParams(hash);
+                
+                const wW = parseInt(params.get('wW'));
+                const wT = parseInt(params.get('wT'));
+                const wO = parseInt(params.get('wO'));
+                
+                const sW = parseFloat(params.get('sW'));
+                const sT = parseFloat(params.get('sT'));
+                const sO = parseFloat(params.get('sO'));
+                
+                const cmp = params.get('cmp');
+
+                if (!isNaN(wW)) { weightWInput.value = wW; weightWNum.value = wW; }
+                if (!isNaN(wT)) { weightTInput.value = wT; weightTNum.value = wT; }
+                if (!isNaN(wO)) { weightOInput.value = wO; weightONum.value = wO; }
+
+                if (!isNaN(sW)) scoreWInput.value = sW;
+                if (!isNaN(sT)) scoreTInput.value = sT;
+                if (!isNaN(sO)) scoreOInput.value = sO;
+
+                if (cmp === 'equal' || cmp === 'greater') {
+                    document.querySelector(`input[name="compareMode"][value="${cmp}"]`).checked = true;
+                }
+                return true;
+            } catch (e) {
+                console.error("無法解析網址設定參數：", e);
+                return false;
+            }
+        }
+
+        // 儲存狀態至 URL Hash 並提供複製
+        function saveStateToHash(copy = false) {
+            const wW = weightWInput.value;
+            const wT = weightTInput.value;
+            const wO = weightOInput.value;
+            
+            const sW = scoreWInput.value;
+            const sT = scoreTInput.value;
+            const sO = scoreOInput.value;
+
+            const cmp = document.querySelector('input[name="compareMode"]:checked').value;
+
+            const params = new URLSearchParams();
+            params.set('wW', wW);
+            params.set('wT', wT);
+            params.set('wO', wO);
+            params.set('sW', sW);
+            params.set('sT', sT);
+            params.set('sO', sO);
+            params.set('cmp', cmp);
+
+            const newHash = params.toString();
+            window.location.hash = newHash;
+
+            if (copy) {
+                const shareUrl = window.location.origin + window.location.pathname + '#' + newHash;
+                
+                // 相容部分環境的複製文字
+                const tempInput = document.createElement('input');
+                tempInput.value = shareUrl;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('複製成功！已將目前的成績配分保存在複製連結中。');
+                } catch (err) {
+                    showToast('複製失敗，請手動複製網址列。');
+                }
+                document.body.removeChild(tempInput);
+            }
+        }
+
+        btnShare.addEventListener('click', () => {
+            saveStateToHash(true);
+        });
+
+        // 核心計算與矩陣渲染
+        function calculateAndRender() {
+            const wW = parseInt(weightWInput.value) || 0;
+            const wT = parseInt(weightTInput.value) || 0;
+            const wO = parseInt(weightOInput.value) || 0;
+
+            const sW = parseFloat(scoreWInput.value) || 0;
+            const sT = parseFloat(scoreTInput.value) || 0;
+            const sO = parseFloat(scoreOInput.value) || 0;
+
+            const compareMode = document.querySelector('input[name="compareMode"]:checked').value;
+
+            // 更新畫面的權重文字
+            weightWValText.innerText = wW + '%';
+            weightTValText.innerText = wT + '%';
+            weightOValText.innerText = wO + '%';
+
+            // 比例得分計算
+            const weightedW = (sW * wW) / 100;
+            const weightedT = (sT * wT) / 100;
+            const weightedO = (sO * wO) / 100;
+
+            weightedWScoreSpan.innerText = weightedW.toFixed(2);
+            weightedTScoreSpan.innerText = weightedT.toFixed(2);
+            weightedOScoreSpan.innerText = weightedO.toFixed(2);
+
+            const totalScore = weightedW + weightedT + weightedO;
+            currentTotalSpan.innerText = totalScore.toFixed(3);
+
+            // 檢查權重和
+            const weightSum = wW + wT + wO;
+            if (weightSum !== 100) {
+                weightSumBadge.innerText = `總和 ${weightSum}% (不等於100)`;
+                weightSumBadge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 animate-pulse";
+                weightSumText.innerText = weightSum;
+                weightWarning.classList.remove('hidden');
+                
+                // 遮蔽或清空矩陣表格
+                matrixTable.innerHTML = `
+                    <tbody>
+                        <tr>
+                            <td class="p-12 text-center text-slate-400">
+                                <div class="text-lg font-bold text-red-500 mb-2">無法生成落點表格</div>
+                                <div>您的權重設定總和不為 100%（目前為 ${weightSum}%），請調整左方數值使總和恰好為 100%。</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                `;
+                return;
+            } else {
+                weightSumBadge.innerText = `總和 100%`;
+                weightSumBadge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500";
+                weightWarning.classList.add('hidden');
+            }
+
+            // 安全性檢查：筆試權重若為0，則無法透過筆試分數拉回總分
+            if (wW <= 0) {
+                matrixTable.innerHTML = `
+                    <tbody>
+                        <tr>
+                            <td class="p-12 text-center text-slate-400">
+                                <div class="text-lg font-bold text-red-500 mb-2">筆試權重不能為 0%</div>
+                                <div>若筆試沒有權重，不論筆試考多少分皆不會影響總分，無法進行本模擬分析。</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                `;
+                return;
+            }
+
+            // 保存狀態到 hash (但不觸發複製)
+            saveStateToHash(false);
+
+            // ------------------ 生成二維矩陣表格 ------------------
+            // 橫軸 (試教): 70 ~ 90 (21 個點)
+            // 縱軸 (口試): 70 ~ 90 (21 個點)
+            
+            let htmlHead = `
+                <tr>
+                    <th class="sticky-corner bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold w-[75px] h-11 text-indigo-500">
+                        <div class="relative w-full h-full flex flex-col justify-between p-1">
+                            <span class="text-right text-[10px] text-slate-400 leading-none">試教 →</span>
+                            <span class="text-left text-[10px] text-slate-400 leading-none">口試 ↓</span>
+                        </div>
+                    </th>
+            `;
+            for (let t = 70; t <= 90; t++) {
+                htmlHead += `
+                    <th data-header-col="${t}" class="sticky-row bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-black text-slate-600 dark:text-slate-300 w-11 h-11 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
+                        ${t}
+                    </th>
+                `;
+            }
+            htmlHead += `</tr>`;
+
+            let htmlBody = '';
+            for (let o = 70; o <= 90; o++) {
+                htmlBody += `<tr>`;
+                // 第一行：口試標題 (y軸)
+                htmlBody += `
+                    <th data-header-row="${o}" class="sticky-col bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-black text-slate-600 dark:text-slate-300 w-[75px] h-11 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
+                        ${o}
+                    </th>
+                `;
+
+                for (let t = 70; t <= 90; t++) {
+                    // 計算目標總分 threshold
+                    // compareMode: 'equal' (>= totalScore) 或 'greater' (> totalScore + 0.0001)
+                    let target = totalScore;
+                    if (compareMode === 'greater') {
+                        target += 0.0001; // 必須嚴格大於
+                    }
+
+                    // 複試（試教口試）比例得分
+                    const currentWeightedT = (t * wT) / 100;
+                    const currentWeightedO = (o * wO) / 100;
+
+                    // 筆試需要之最低比例分數 = target - currentWeightedT - currentWeightedO
+                    // 最低筆試原始分數 = (最低筆試比例分數 * 100) / wW
+                    const requiredW = ((target - currentWeightedT - currentWeightedO) * 100) / wW;
+
+                    let displayScore = "";
+                    let cellClass = "";
+                    let isImpossible = false;
+                    let isGuaranteed = false;
+
+                    if (requiredW > 100) {
+                        isImpossible = true;
+                        displayScore = "❌";
+                        // ❌ 紅色調 
+                        cellClass = "bg-red-500/10 text-red-500 border-red-500/10 dark:bg-red-950/20 dark:text-red-400 dark:border-red-950/30 font-bold";
+                    } else if (requiredW <= 0) {
+                        isGuaranteed = true;
+                        displayScore = "0.0";
+                        // 0.0 亮綠色
+                        cellClass = "bg-teal-500/20 text-teal-600 dark:text-teal-300 border-teal-500/10 font-bold";
+                    } else {
+                        // 無條件進位至 0.5 級距
+                        const rounded = Math.ceil(requiredW * 2) / 2;
+                        displayScore = rounded.toFixed(1);
+
+                        // 依分數高低給予熱圖漸層色
+                        if (rounded <= 60.0) {
+                            // 綠色（輕鬆過關）
+                            cellClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/5 hover:scale-105";
+                        } else if (rounded <= 80.0) {
+                            // 藍色（一般難度）
+                            cellClass = "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/5 hover:scale-105";
+                        } else if (rounded <= 90.0) {
+                            // 黃色（偏難挑戰）
+                            cellClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/5 hover:scale-105";
+                        } else {
+                            // 橘色（極高難度）
+                            cellClass = "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/5 hover:scale-105";
+                        }
+                    }
+
+                    htmlBody += `
+                        <td data-t="${t}" data-o="${o}" data-required="${requiredW.toFixed(3)}" data-display="${displayScore}"
+                            class="border border-slate-200 dark:border-slate-800/60 text-xs font-semibold cursor-pointer select-none transition-all duration-100 ${cellClass}"
+                            style="height: 44px; width: 44px;">
+                            ${displayScore}
+                        </td>
+                    `;
+                }
+                htmlBody += `</tr>`;
+            }
+
+            matrixTable.innerHTML = `<thead>${htmlHead}</thead><tbody>${htmlBody}</tbody>`;
+
+            // 掛載表格互動監聽器
+            setupTableInteractions();
+        }
+
+        // 滑鼠十字線與懸停面板互動
+        function setupTableInteractions() {
+            const cells = matrixTable.querySelectorAll('tbody td');
+            
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', function() {
+                    const t = parseInt(this.getAttribute('data-t'));
+                    const o = parseInt(this.getAttribute('data-o'));
+                    const required = parseFloat(this.getAttribute('data-required'));
+                    const display = this.getAttribute('data-display');
+
+                    const wW = parseInt(weightWInput.value);
+                    const wT = parseInt(weightTInput.value);
+                    const wO = parseInt(weightOInput.value);
+                    const baseTotal = parseFloat(currentTotalSpan.innerText);
+                    const cmpText = document.querySelector('input[name="compareMode"]:checked').value === 'equal' ? '追平' : '絕對超越';
+
+                    // 1. 高亮整排與整列
+                    // 橫排高亮 (口試相同)
+                    matrixTable.querySelectorAll(`tbody td[data-o="${o}"]`).forEach(td => {
+                        td.classList.add('bg-slate-200/50', 'dark:bg-slate-800/40');
+                    });
+                    // 直行高亮 (試教相同)
+                    matrixTable.querySelectorAll(`tbody td[data-t="${t}"]`).forEach(td => {
+                        td.classList.add('bg-slate-200/50', 'dark:bg-slate-800/40');
+                    });
+                    
+                    // 高亮表頭
+                    const thRow = matrixTable.querySelector(`th[data-header-row="${o}"]`);
+                    const thCol = matrixTable.querySelector(`th[data-header-col="${t}"]`);
+                    if(thRow) thRow.classList.add('bg-indigo-500', 'text-white', 'dark:bg-indigo-600');
+                    if(thCol) thCol.classList.add('bg-indigo-500', 'text-white', 'dark:bg-indigo-600');
+
+                    // 當前格子加粗外框
+                    this.classList.add('ring-2', 'ring-indigo-500', 'z-10');
+
+                    // 2. 渲染詳情分析卡片
+                    let textAnalysis = "";
+                    if (display === "❌") {
+                        const maxPossibleScore = (100 * wW + t * wT + o * wO) / 100;
+                        textAnalysis = `
+                            <p class="text-sm font-medium flex items-center text-red-500">
+                                ❌ <b>無法達成！</b> 試教 ${t}分、口試 ${o}分 時，即便您筆試考 100分 滿分，總分也只有 <b>${maxPossibleScore.toFixed(2)}</b> 分。
+                            </p>
+                            <p class="text-sm">
+                                仍落後基準分 (${baseTotal.toFixed(2)}分) 約 <span class="font-bold">${(baseTotal - maxPossibleScore).toFixed(2)}</span> 分，不可能考取。
+                            </p>
+                        `;
+                    } else if (display === "0.0") {
+                        const zeroWTotal = (0 * wW + t * wT + o * wO) / 100;
+                        textAnalysis = `
+                            <p class="text-sm font-semibold flex items-center text-teal-500">
+                                🎉 <b>穩操勝算！不需要筆試！</b>
+                            </p>
+                            <p class="text-sm text-slate-700 dark:text-slate-200">
+                                在 試教 = <b>${t}分</b>、口試 = <b>${o}分</b> 時，光是複試得分比例就高達 <b>${zeroWTotal.toFixed(2)}</b> 分。
+                                此分數已高於基準總分（${baseTotal.toFixed(2)}分），故<b>筆試 0 分</b>也能${cmpText}自己！
+                            </p>
+                        `;
+                    } else {
+                        // 正常計算數據
+                        const mathDetailTotal = (required * wW + t * wT + o * wO) / 100;
+                        const finalTotal = (parseFloat(display) * wW + t * wT + o * wO) / 100;
+                        textAnalysis = `
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                    <span class="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                        👉 試教 <span class="text-indigo-500 font-extrabold">${t}</span> 分、口試 <span class="text-indigo-500 font-extrabold">${o}</span> 分
+                                    </span>
+                                    <div class="text-xs text-slate-400 mt-0.5">
+                                        理論最低筆試原始需：${required.toFixed(2)} 分 | 進位後筆試至少需：<span class="font-bold text-indigo-500 text-sm">${display}</span> 分
+                                    </div>
+                                </div>
+                                <div class="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black px-3 py-1.5 rounded-lg text-sm self-start text-center">
+                                    筆試需：${display} 分
+                                </div>
+                            </div>
+                            <div class="text-xs border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 leading-relaxed text-slate-500 dark:text-slate-300">
+                                實際計算：筆試考 <b>${display}</b> 分時，配分後筆試得分 ${(parseFloat(display)*wW/100).toFixed(2)} + 試教 ${(t*wT/100).toFixed(2)} + 口試 ${(o*wO/100).toFixed(2)} 
+                                = 最終總分 <b>${finalTotal.toFixed(2)}分</b>，成功${cmpText}目前基準分數 (${baseTotal.toFixed(2)}分)！
+                            </div>
+                        `;
+                    }
+                    analysisPanel.innerHTML = textAnalysis;
+                });
+
+                cell.addEventListener('mouseleave', function() {
+                    const t = this.getAttribute('data-t');
+                    const o = this.getAttribute('data-o');
+
+                    // 1. 移除高亮
+                    matrixTable.querySelectorAll(`tbody td[data-o="${o}"]`).forEach(td => {
+                        td.classList.remove('bg-slate-200/50', 'dark:bg-slate-800/40');
+                    });
+                    matrixTable.querySelectorAll(`tbody td[data-t="${t}"]`).forEach(td => {
+                        td.classList.remove('bg-slate-200/50', 'dark:bg-slate-800/40');
+                    });
+                    
+                    const thRow = matrixTable.querySelector(`th[data-header-row="${o}"]`);
+                    const thCol = matrixTable.querySelector(`th[data-header-col="${t}"]`);
+                    if(thRow) thRow.classList.remove('bg-indigo-500', 'text-white', 'dark:bg-indigo-600');
+                    if(thCol) thCol.classList.remove('bg-indigo-500', 'text-white', 'dark:bg-indigo-600');
+
+                    this.classList.remove('ring-2', 'ring-indigo-500', 'z-10');
+
+                    // 2. 還原提示文字
+                    analysisPanel.innerHTML = `
+                        <p class="text-sm font-medium flex items-center text-indigo-500">
+                            <svg class="w-5 h-5 mr-1.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            點擊或滑鼠滑過下表任何一格：
+                        </p>
+                        <p class="text-base text-slate-800 dark:text-slate-100 font-medium">
+                            了解在該「口試」與「試教」分數下，筆試至少需要考多少，才能突破現狀！
+                        </p>
+                    `;
+                });
+            });
+        }
+
+        // CSV 匯出功能
+        btnExport.addEventListener('click', () => {
+            const wW = weightWInput.value;
+            const wT = weightTInput.value;
+            const wO = weightOInput.value;
+            const baseTotal = parseFloat(currentTotalSpan.innerText);
+            
+            let csvContent = "\ufeff"; // BOM，解決 Excel 開啟亂碼問題
+            csvContent += `教甄成績落點模擬分析報告,,,,,,\n`;
+            csvContent += `目前配分比例,筆試:${wW}%,試教:${wT}%,口試:${wO}%,,,\n`;
+            csvContent += `基準總分,${baseTotal.toFixed(3)}分,,,,\n\n`;
+            
+            // 橫軸 (試教)
+            csvContent += `口試＼試教,`;
+            for (let t = 70; t <= 90; t++) {
+                csvContent += `${t},`;
+            }
+            csvContent += "\n";
+
+            for (let o = 70; o <= 90; o++) {
+                csvContent += `${o},`;
+                for (let t = 70; t <= 90; t++) {
+                    const cell = matrixTable.querySelector(`td[data-t="${t}"][data-o="${o}"]`);
+                    const val = cell ? cell.innerText : "";
+                    csvContent += `${val},`;
+                }
+                csvContent += "\n";
+            }
+
+            // 建立 Blob 下載
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `教甄筆試最低落點分析表_${wW}-${wT}-${wO}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('CSV 報表已匯出下載！');
+        });
+
+        // 頁面初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            // 先嘗試從 Hash 載入設定，沒有的話就載入預設值
+            const loaded = loadStateFromHash();
+            calculateAndRender();
+            if (loaded) {
+                showToast('已為您成功載入分享設定！');
+            }
+        });
+
+        // 當使用者回到上一頁或 Hash 改變時重新讀取
+        window.addEventListener('hashchange', () => {
+            if (loadStateFromHash()) {
+                calculateAndRender();
+            }
+        });
+    </script>
+</body>
+</html>
