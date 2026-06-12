@@ -258,12 +258,24 @@
                     <!-- 核心統計數據卡片 -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <!-- 名次區間 -->
-                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col relative overflow-hidden">
                             <div class="absolute top-0 right-0 w-24 h-24 -mr-6 -mt-6 bg-violet-50 rounded-full -z-0 opacity-50"></div>
-                            <div class="relative z-10">
-                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">預估加權總名次</span>
-                                <div class="text-2xl font-black text-violet-700" id="resRankRange">第 -- ~ -- 名</div>
-                                <p class="text-[11px] text-slate-500 mt-2" id="resAvgRank">最可能排名：第 -- 名</p>
+                            <div class="relative z-10 flex-1 flex flex-col justify-between">
+                                <div>
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">預估加權總名次</span>
+                                    <div class="text-2xl font-black text-violet-700" id="resRankRange">第 -- ~ -- 名</div>
+                                    <p class="text-[11px] text-slate-500 mt-2" id="resAvgRank">最可能排名：第 -- 名</p>
+                                </div>
+                                
+                                <!-- 🏆 各名次達成機率分佈 -->
+                                <div class="mt-4 pt-4 border-t border-slate-100 text-xs hidden" id="rankProbsContainer">
+                                    <span class="block font-bold text-slate-500 mb-2 flex items-center gap-1">
+                                        📊 各名次達成機率分佈：
+                                    </span>
+                                    <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar text-slate-600 font-medium" id="resRankProbs">
+                                        <!-- 動態填充 -->
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -445,6 +457,7 @@
             return arr.reduce((acc, val) => acc + val, 0) / arr.length;
         }
 
+        // 計算標準差
         function getStdDev(arr, mean) {
             if (arr.length < 2) return 10;
             const variance = arr.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / (arr.length - 1);
@@ -759,10 +772,35 @@
             const maxAttempts = 100; // 防呆安全上限，避開無限死循環
             
             do {
-                if (sub.dist === 'normal') s = randomNormal(stats.mean, stats.std);
-                else if (sub.dist === 'bounded') s = randomBounded70_90();
-                else if (sub.dist === 'uniform') s = randomUniform(stats.mean - stats.std * 1.73, stats.mean + stats.std * 1.73);
-                else if (sub.dist === 'triangular') s = randomTriangular(stats.mean - stats.std * 2.44, stats.mean + stats.std * 2.44, stats.mean);
+                if (sub.dist === 'normal') {
+                    s = randomNormal(stats.mean, stats.std);
+                } else if (sub.dist === 'bounded') {
+                    // 🏆 應使用者修正與新概念升級：「評審打分 70-90」的自適應常態分散比例。
+                    // 根據已知考生分數數量 k，動態調整模擬分數落在現有考生分數區間 [stats.min, stats.max] 內之機率。
+                    // 知道的考生分數越多，收斂在這個區間的機率越高；反之越少，則越分散在 [70, 90] 區間。
+                    const k = stats.rawScores ? stats.rawScores.length : 1;
+                    const inRangeProb = 0.15 + Math.min(0.70, (k - 1) * 0.08); // 依已知人數從 15% (動態發散) 到 85% (高度收斂)
+                    
+                    if (Math.random() < inRangeProb) {
+                        // 高比例集中於此真實考生區間內 (常態收縮)
+                        const localMean = stats.mean;
+                        const localStd = Math.max(1.5, (stats.max - stats.min) / 4); // 收縮標準差
+                        s = randomNormal(localMean, localStd);
+                        if (s < stats.min || s > stats.max) {
+                            s = randomUniform(stats.min, stats.max);
+                        }
+                    } else {
+                        // 15% ~ 85% 的分散機率（在已知極少時會占多數），發散落在現有考生區間之外（仍受 70~90 限制）
+                        s = randomNormal(stats.mean, 6.0); // 使用較寬的分佈
+                        if (s < 70 || s > 90) {
+                            s = randomUniform(70, 90);
+                        }
+                    }
+                } else if (sub.dist === 'uniform') {
+                    s = randomUniform(stats.mean - stats.std * 1.73, stats.mean + stats.std * 1.73);
+                } else if (sub.dist === 'triangular') {
+                    s = randomTriangular(stats.mean - stats.std * 2.44, stats.mean + stats.std * 2.44, stats.mean);
+                }
                 attempts++;
             } while (hasThreshold && s < threshold && attempts < maxAttempts);
 
@@ -774,7 +812,7 @@
             return s;
         }
 
-        // 智慧型多科目獨立生成器，回傳加權分與單科分數細節（解決問題 2 核心）
+        // 智慧型多科目獨立生成器，回傳加權分與單科分數細節
         function generateVirtualCandidateScores(subStats, shiftDelta, knowCutoff, scoreRes, step, MaxS = 100) {
             const candScores = {};
             let totalWeighted = 0;
@@ -921,6 +959,12 @@
             const subStats = {};
             subjects.forEach(sub => {
                 const validScores = [];
+                
+                // 智慧優化：統計考科分佈特徵時同時納入使用者自己的手填分數，避免數據庫無人有成績時無法解析。
+                if (userScores && userScores[sub.id] !== undefined && userScores[sub.id] !== null) {
+                    validScores.push(userScores[sub.id]);
+                }
+                
                 K.forEach(cand => {
                     if (cand.scores[sub.id] !== null) {
                         validScores.push(cand.scores[sub.id]);
@@ -957,7 +1001,14 @@
                     std = Math.max(4, Math.min(18, std));
                 }
 
-                subStats[sub.id] = { mean, std };
+                // 🏆 智慧自適應：精確鎖定現有考生出現過的分數區間 min/max（含 1.0 的安全 padding 防止零寬區間）
+                let rawMin = validScores.length > 0 ? Math.min(...validScores) : 78;
+                let rawMax = validScores.length > 0 ? Math.max(...validScores) : 84;
+                
+                let minVal = Math.max(70, rawMin - 1.0);
+                let maxVal = Math.min(90, rawMax + 1.0);
+
+                subStats[sub.id] = { mean, std, min: minVal, max: maxVal, rawScores: validScores };
             });
 
             // 精度設定
@@ -1151,6 +1202,7 @@
                     id: `sim_cand_${i}`,
                     name: `模擬考生 #${i + 1}`,
                     isUser: false,
+                    // 確保 origScores 在任何情況下都存在空屬性
                     origScores: subjects.reduce((acc, sub) => { acc[sub.id] = null; return acc; }, {}),
                     sumRank: 0,
                     sumWeightedScore: 0,
@@ -1290,13 +1342,25 @@
             const rankLow = Math.round(getPercentile(simulatedRanks, 0.05));
             const rankHigh = Math.round(getPercentile(simulatedRanks, 0.95));
 
+            // 計算各個名次的達成機率分佈 (萬次回合精確統計)
+            const rankCounts = {};
+            simulatedRanks.forEach(r => {
+                rankCounts[r] = (rankCounts[r] || 0) + 1;
+            });
+            const rankProbs = [];
+            for (let r in rankCounts) {
+                const prob = (rankCounts[r] / trials) * 100;
+                rankProbs.push({ rank: parseInt(r), prob: prob });
+            }
+            rankProbs.sort((a, b) => a.rank - b.rank); // 名次由低到高排序
+
             const admissionProb = (passCount / trials) * 100;
             const beatenPeople = Math.max(0, N - medianRank);
             const beatenRate = (beatenPeople / N) * 100;
 
             const finalCutoff = knowCutoff ? Cutoff : (sumCutoffScore / trials);
 
-            // 求總成績母體特蹤統計量
+            // 求總成績母體特徵統計量
             let sampleSums = 0;
             let sampleCount = 500;
             const testBatch = [];
@@ -1314,10 +1378,29 @@
                 admissionProb, beatenPeople, beatenRate,
                 finalCutoff, kMean: sampleMean, kStd: sampleStd, KCount: kCount,
                 rankingsList: finalRankingsList, // 排行榜數據包已完美優化
-                generateVirtualCandidateWeighted
+                rankProbs, // 傳遞給渲染引擎的名次機率數據
+                generateVirtualCandidateWeighted,
+                subStats // 🏆 傳遞次數給渲染模組，修復原先 subStats 缺失導致的 ReferenceError 錯誤！
             };
 
             renderResults(lastAnalysisResult);
+        }
+
+        // 智慧型格式化名次顯示
+        function formatRank(rank, Q_actual) {
+            if (rank <= Q_actual) {
+                return `第 ${rank} 名`;
+            } else {
+                return `備取 ${rank - Q_actual}`;
+            }
+        }
+
+        // 智慧型格式化名次區間文本
+        function formatRankRangeText(low, high, Q_actual) {
+            const lowText = low <= Q_actual ? `第 ${low}` : `備取 ${low - Q_actual}`;
+            const highText = high <= Q_actual ? `第 ${high}` : `備取 ${high - Q_actual}`;
+            if (low === high) return lowText;
+            return `${lowText} 至 ${highText}`;
         }
 
         // --- 7. 數據與 UI 渲染 ---
@@ -1325,11 +1408,54 @@
             document.getElementById('loader').classList.add('hidden');
             document.getElementById('resultPanel').classList.remove('hidden');
 
-            // 1. 名次落點
-            document.getElementById('resRankRange').innerHTML = `第 <span class="text-3xl font-black text-violet-700">${res.rankLow}</span> ~ <span class="text-3xl font-black text-violet-700">${res.rankHigh}</span> 名`;
-            document.getElementById('resAvgRank').innerText = `最可能排名：第 ${res.medianRank} 名 (全場排名前 ${(res.medianRank/res.N*100).toFixed(1)}%)`;
+            // 1. 名次落點卡片 (正取與備取動態格式化)
+            if (res.rankLow === res.rankHigh) {
+                document.getElementById('resRankRange').innerHTML = res.rankLow <= res.Q_actual 
+                    ? `第 <span class="text-3xl font-black text-violet-700">${res.rankLow}</span> 名` 
+                    : `<span class="text-3xl font-black text-violet-700">備取 ${res.rankLow - res.Q_actual}</span>`;
+            } else {
+                const lowSpan = res.rankLow <= res.Q_actual 
+                    ? `第 <span class="text-3xl font-black text-violet-700">${res.rankLow}</span>` 
+                    : `<span class="text-3xl font-black text-violet-700">備取 ${res.rankLow - res.Q_actual}</span>`;
+                    
+                const highSpan = res.rankHigh <= res.Q_actual 
+                    ? `第 <span class="text-3xl font-black text-violet-700">${res.rankHigh}</span> 名` 
+                    : `<span class="text-3xl font-black text-violet-700">備取 ${res.rankHigh - res.Q_actual}</span>`;
+                    
+                document.getElementById('resRankRange').innerHTML = `${lowSpan} ~ ${highSpan}`;
+            }
 
-            // 2. 錄取機率
+            const avgRankText = res.medianRank <= res.Q_actual 
+                ? `第 ${res.medianRank} 名` 
+                : `備取 ${res.medianRank - res.Q_actual}`;
+            document.getElementById('resAvgRank').innerText = `最可能排名：${avgRankText} (全場排名前 ${(res.medianRank/res.N*100).toFixed(1)}%)`;
+
+            // 🏆 2. 渲染各名次達成機率分佈 (新增正取/備取機率分佈)
+            const rankProbsContainer = document.getElementById('rankProbsContainer');
+            const resRankProbs = document.getElementById('resRankProbs');
+            if (res.rankProbs && res.rankProbs.length > 0) {
+                rankProbsContainer.classList.remove('hidden');
+                resRankProbs.innerHTML = '';
+                res.rankProbs.forEach(item => {
+                    const isMedian = item.rank === res.medianRank;
+                    const rankLabel = item.rank <= res.Q_actual ? `第 ${item.rank} 名` : `備取 ${item.rank - res.Q_actual}`;
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `flex justify-between items-center px-2.5 py-1.5 rounded border transition-all ${
+                        isMedian 
+                        ? 'bg-violet-100/70 border-violet-300 text-violet-950 font-bold scale-[1.02]' 
+                        : 'bg-slate-50 border-slate-200/60 text-slate-700'
+                    }`;
+                    itemDiv.innerHTML = `
+                        <span>${rankLabel}</span>
+                        <span class="font-mono text-xs ${isMedian ? 'text-violet-700' : 'text-slate-500'}">${item.prob.toFixed(2)}%</span>
+                    `;
+                    resRankProbs.appendChild(itemDiv);
+                });
+            } else {
+                rankProbsContainer.classList.add('hidden');
+            }
+
+            // 3. 錄取機率
             const probText = res.admissionProb.toFixed(1);
             document.getElementById('resProbText').innerText = `${probText} %`;
             
@@ -1356,11 +1482,11 @@
             document.getElementById('resProbCircle').setAttribute('stroke-dasharray', `${probText}, 100`);
             document.getElementById('resProbCircleText').innerText = `${Math.round(res.admissionProb)}%`;
 
-            // 3. 擊敗比例
+            // 4. 擊敗比例
             document.getElementById('resBeatenRate').innerText = `${res.beatenRate.toFixed(1)} %`;
             document.getElementById('resBeatenText').innerText = `領先全考場約 ${res.beatenPeople} 人`;
 
-            // 🏆 4. 渲染複試模擬預估落點排行榜 
+            // 5. 渲染複試模擬預估落點排行榜 
             const rankingHeader = document.getElementById('rankingSubjectsHeader');
             let subjectsHeaderHtml = '各科得分';
             if (subjects.length > 0) {
@@ -1368,10 +1494,8 @@
             }
             rankingHeader.innerText = subjectsHeaderHtml;
 
-            // 邊緣遞補演算法實作（解決邊緣區動態分界與跳空指標問題）
+            // 邊緣遞補演算法實作
             const Q = res.Q_planned;
-            
-            // 計算前 Q 名中有多少位模擬考生 (id 開頭為 'sim_')
             let M = 0;
             for (let i = 0; i < Math.min(Q, res.rankingsList.length); i++) {
                 if (res.rankingsList[i].id.startsWith('sim_')) {
@@ -1379,9 +1503,8 @@
                 }
             }
 
-            // 尋找邊緣區的截止索引（往下拉到剛好包含 M 個真實考生為止）
             let realCountBelowQ = 0;
-            let borderlineEndIndex = Q - 1; // 預設若 M = 0 則沒有邊緣區
+            let borderlineEndIndex = Q - 1; 
             if (M > 0) {
                 for (let i = Q; i < res.rankingsList.length; i++) {
                     const isSim = res.rankingsList[i].id.startsWith('sim_');
@@ -1419,7 +1542,6 @@
                     const origVal = cand.origScores[sub.id];
                     if (origVal === null) {
                         const avgVal = cand.avgScores[sub.id];
-                        // 如果平均為 0，表示是真的缺考（例如模擬考生從未被賦予分數，或手動設為 0），則保留 0 分
                         scoresHtmlList.push(`<span class="text-slate-400 italic" title="此為未知科目，由系統萬次模擬得出之平均期望值">~${avgVal.toFixed(1)}</span>`);
                     } else {
                         scoresHtmlList.push(`<span class="font-bold text-slate-800">${origVal}</span>`);
@@ -1427,9 +1549,14 @@
                 });
                 const scoresJoined = scoresHtmlList.join(' / ');
 
+                // 🏆 修正需求：名次顯示超出錄取名額的改為「備取1、備取2」等
+                const displayRankText = cand.displayRank <= res.Q_actual 
+                    ? (cand.isUser ? `第 ${cand.displayRank} 名` : cand.displayRank)
+                    : `備取 ${cand.displayRank - res.Q_actual}`;
+
                 tr.innerHTML = `
                     <td class="py-2.5 px-4 text-center font-black ${cand.isUser ? 'text-violet-700 text-sm' : 'text-slate-500'}">
-                        ${cand.displayRank}
+                        ${displayRankText}
                     </td>
                     <td class="py-2.5 px-4">
                         <div class="flex items-center gap-1">
@@ -1450,13 +1577,13 @@
                 rankingTableBody.appendChild(tr);
             });
 
-            // 5. 下方圖例統計
+            // 6. 下方圖例統計
             document.getElementById('infoStats').innerText = `${res.kMean.toFixed(1)} 分 / ${res.kStd.toFixed(1)} 分`;
             document.getElementById('infoCutoff').innerText = `${res.finalCutoff.toFixed(2)} 分`;
             document.getElementById('infoQuota').innerText = `${res.Q_planned} / ${res.Q_actual} 人`;
             document.getElementById('infoTrials').innerText = `${res.trials.toLocaleString()} 次`;
 
-            // 6. AI 分析報告
+            // 7. AI 分析報告 (同步更新診斷報告中的名次區間格式)
             const aiTextEl = document.getElementById('aiAnalysisText');
             let diagnosis = `<p>您的綜合加權分數 <strong>${res.U.toFixed(2)} 分</strong>，相對於二試多考科採計設定，評估結果如下：</p>`;
             
@@ -1466,12 +1593,14 @@
                 tieDesc = `（已考量增設的 <strong>${tieDiff} 名複試同分增額名額限制</strong>）`;
             }
 
+            const rangeText = formatRankRangeText(res.rankLow, res.rankHigh, res.Q_actual);
+
             if (res.U >= res.finalCutoff) {
                 const margin = res.U - res.finalCutoff;
-                diagnosis += `<p>🟢 您的總積分目前 <strong>領先錄取總分線約 ${margin.toFixed(2)} 分</strong>。在 <strong>${res.trials.toLocaleString()} 次</strong> 二試加權隨機分發模擬下，上榜率高達 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。您的加權總名次落點預估為第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名。</p>`;
+                diagnosis += `<p>🟢 您的總積分目前 <strong>領先錄取總分線約 ${margin.toFixed(2)} 分</strong>。在 <strong>${res.trials.toLocaleString()} 次</strong> 二試加權隨機分發模擬下，上榜率高達 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。您的加權總名次落點預估為 <strong>${rangeText}</strong> 之間。</p>`;
             } else {
                 const margin = res.finalCutoff - res.U;
-                diagnosis += `<p>🔴 您的總積分目前 <strong>落後估計錄取總分線約 ${margin.toFixed(2)} 分</strong>。在模擬中，您的錄取機會為 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。加權名次落點大約在第 <strong>${res.rankLow} 至 ${res.rankHigh}</strong> 名之間。</p>`;
+                diagnosis += `<p>🔴 您的總積分目前 <strong>落後估計錄取總分線約 ${margin.toFixed(2)} 分</strong>。在模擬中，您的錄取機會為 <strong>${res.admissionProb.toFixed(1)}%</strong> ${tieDesc}。加權名次落點大約在 <strong>${rangeText}</strong> 之間。</p>`;
             }
 
             // 說明是否有啟用單科門檻
@@ -1482,6 +1611,21 @@
                     diagnosis += `${idx > 0 ? '、' : ''}<strong>${sub.name} &ge; ${sub.threshold} 分</strong>`;
                 });
                 diagnosis += `。所有模擬產出的考生皆會被限制在此成績之上，大幅擬真了複試階段考生的基本筆試水準！</p>`;
+            }
+
+            // 說明評審打分的智慧限縮分佈
+            const boundedSubjects = subjects.filter(sub => sub.dist === 'bounded');
+            if (boundedSubjects.length > 0) {
+                diagnosis += `<p>📈 模擬針對 <strong>${boundedSubjects.map(sub => sub.name).join('、')}</strong> 改良了自適應同儕打分分佈模型：`;
+                boundedSubjects.forEach((sub, idx) => {
+                    const stats = res.subStats ? res.subStats[sub.id] : null; 
+                    if (stats) {
+                        const k = stats.rawScores ? stats.rawScores.length : 1;
+                        const inRangeProb = (0.15 + Math.min(0.70, (k - 1) * 0.08)) * 100;
+                        diagnosis += `${idx > 0 ? '、' : ''}<strong>${sub.name}</strong> 的收斂打分機率已隨同儕樣本數（當前共 <strong>${k}</strong> 筆分數）自適應調整為 <strong>${inRangeProb.toFixed(0)}%</strong>（限制落於 <strong>${stats.min.toFixed(1)} ~ ${stats.max.toFixed(1)} 分</strong>），其餘 <strong>${(100 - inRangeProb).toFixed(0)}%</strong> 的機率發散至 70~90 分外圍`;
+                    }
+                });
+                diagnosis += `。這依據您提供的考生數量動態調節了評分的分散度，名次可信度極致逼真！</p>`;
             }
 
             if (res.scoreRes !== 'continuous') {
@@ -1496,7 +1640,7 @@
 
             aiTextEl.innerHTML = diagnosis;
 
-            // 7. 繪製畫布
+            // 8. 繪製畫布
             drawResultChart(res);
         }
 
@@ -1647,6 +1791,7 @@
             ctx.font = '10px "Noto Sans TC"';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
+            // 修正錯誤：將 = 更改為 ? 以修復三元條件運算子中的語法錯誤
             const tickStep = res.MaxS >= 500 ? 100 : (res.MaxS >= 200 ? 50 : 10);
             for (let i = 0; i <= res.MaxS; i += tickStep) {
                 const x = getXPix(i);
